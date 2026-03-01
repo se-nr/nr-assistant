@@ -1,0 +1,33 @@
+{
+  "$schema": "https://claudecodeplugins.io/schemas/mcp-presets.schema.json",
+  "name": "nr-assistant",
+  "description": "MCP server presets for Neble+Rohde agency workflows",
+  "version": "1.0.0",
+  "homepage": "https://github.com/neble-rohde/nr-assistant",
+  "presets": {
+    "nr-agency": {
+      "name": "N+R Agency MCP",
+      "description": "Query Supabase for Meta Ads performance data, top ads, demographics, and client context. Requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY env vars.",
+      "type": "stdio",
+      "command": "node",
+      "args": ["${PLUGIN_DIR}/mcp/nr-agency-mcp/dist/index.js"],
+      "env": {
+        "SUPABASE_URL": "",
+        "SUPABASE_SERVICE_ROLE_KEY": ""
+      },
+      "requiresApiKey": true,
+      "category": "analytics",
+      "tags": ["meta-ads", "supabase", "performance", "agency", "roas"]
+    },
+    "notebooklm": {
+      "name": "NotebookLM MCP",
+      "description": "Query Google NotebookLM notebooks for source-grounded research. Browser automation via Patchright.",
+      "type": "stdio",
+      "command": "/bin/bash",
+      "args": ["${HOME}/.claude/skills/notebooklm/start_mcp.sh"],
+      "requiresApiKey": false,
+      "category": "research",
+      "tags": ["notebooklm", "research", "google", "citations"]
+    }
+  }
+}

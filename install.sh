@@ -31,27 +31,28 @@ echo ""
 VERSION=$(cat "$NR_DIR/VERSION" 2>/dev/null || echo "unknown")
 info "Version: $VERSION"
 
-# ─── 1. Skills ────────────────────────────────────────────────────────────────
+# ─── 1. Skills (plugin format: skills/[name]/SKILL.md) ───────────────────────
 step "1/4  Agency skills"
 
 mkdir -p "$SKILLS_DIR"
 SKILLS=(
-  "agency-onboard.md"
-  "agency-brief.md"
-  "agency-creative.md"
-  "agency-analyze.md"
-  "agency-review.md"
-  "agency-research.md"
+  "agency-onboard"
+  "agency-brief"
+  "agency-creative"
+  "agency-analyze"
+  "agency-review"
+  "agency-research"
 )
 
 for skill in "${SKILLS[@]}"; do
-  src="$NR_DIR/skills/$skill"
-  dst="$SKILLS_DIR/$skill"
-  if [ -f "$src" ]; then
-    cp "$src" "$dst"
-    ok "$skill"
+  src_dir="$NR_DIR/skills/$skill"
+  dst_dir="$SKILLS_DIR/$skill"
+  if [ -f "$src_dir/SKILL.md" ]; then
+    mkdir -p "$dst_dir"
+    cp "$src_dir/SKILL.md" "$dst_dir/SKILL.md"
+    ok "$skill/SKILL.md"
   else
-    warn "$skill – ikke fundet i package (spring over)"
+    warn "$skill/SKILL.md – ikke fundet i package (spring over)"
   fi
 done
 
@@ -129,10 +130,11 @@ echo "     Se ~/.claude/nr-assistant/mcp/nr-agency-mcp/README.md"
 echo ""
 echo "  4. Tilgængelige skills i Claude Code:"
 for skill in "${SKILLS[@]}"; do
-  name="${skill%.md}"
-  cmd="/${name//-/:}"
-  # Only show agency: prefix for agency skills
+  cmd="/${skill}"
   echo "     $cmd"
 done
 echo "     /notebooklm (query, list, search)"
+echo ""
+echo "  5. Slash commands (shortcuts):"
+echo "     /onboard, /brief, /creative, /analyze, /review, /research"
 echo ""

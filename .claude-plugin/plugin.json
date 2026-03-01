@@ -1,0 +1,23 @@
+{
+  "name": "nr-assistant",
+  "version": "1.0.0",
+  "description": "Neble+Rohde agency workflow system – guided onboarding, briefs, creative, performance analyse, månedlig review og source-grounded research via NotebookLM. Inkluderer N+R Agency MCP til automatisk datahentning fra Supabase.",
+  "author": {
+    "name": "Neble+Rohde",
+    "email": "isidor@neble-rohde.dk"
+  },
+  "repository": "https://github.com/neble-rohde/nr-assistant",
+  "license": "UNLICENSED",
+  "keywords": [
+    "meta-ads",
+    "performance-marketing",
+    "agency",
+    "campaign-analysis",
+    "brief",
+    "creative",
+    "supabase",
+    "klaviyo",
+    "notebooklm",
+    "neble-rohde"
+  ]
+}

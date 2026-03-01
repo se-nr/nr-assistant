@@ -1,9 +1,18 @@
 ---
-name: agency:research
-description: Kør research-fase for en klient. Querier NotebookLM automatisk hvis en notebook eksisterer, ellers web research. Output: udfyldt clients/[klient]/context/research-sources.md klar til brand strategi og copy.
+name: agency-research
+description: |
+  Kør research-fase for en klient. Querier NotebookLM automatisk hvis en notebook eksisterer, ellers web research.
+  Output: udfyldt clients/[klient]/context/research-sources.md klar til brand strategi og copy.
+  Trigger: "research klient", "kør research", "find VoC"
 argument-hint: "[klient-navn]"
-allowed-tools: [Read, Write, Bash, WebSearch, WebFetch, AskUserQuestion]
+allowed-tools: Read, Write, Bash, WebSearch, WebFetch, AskUserQuestion
+version: 1.0.0
+author: Neble+Rohde <isidor@neble-rohde.dk>
 ---
+
+# Agency Research
+
+Automatisk research-fase via NotebookLM (primær) eller web (fallback).
 
 <execution_context>
 @~/agency-context/agency/process.md
@@ -123,7 +132,7 @@ Indsaml minimum 10 VoC-citater (5 positive, 5 negative).
 
 ## Trin 5: Gem output
 
-Udfyld `clients/[klient]/context/research-sources.md` med alle fund:
+Udfyld `~/agency-context/clients/[klient]/context/research-sources.md` med alle fund:
 - NotebookLM notebook URL og hvad der er hentet
 - VoC-citater med kilde
 - Konkurrentlandskab
@@ -138,7 +147,7 @@ Er der noget vigtigt der mangler eller er forkert?"
 </process>
 
 <output>
-`clients/[klient]/context/research-sources.md` – udfyldt med:
+`~/agency-context/clients/[klient]/context/research-sources.md` – udfyldt med:
 - NotebookLM notebook-reference
 - VoC-citater (min. 10)
 - Konkurrentlandskab (3-5)
