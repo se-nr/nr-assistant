@@ -39,17 +39,16 @@ export function createMcpServer(): McpServer {
       const sb = getSupabase();
       const { data, error } = await sb
         .from("clients")
-        .select("id, name, meta_account_id, klaviyo_account_id, google_drive_folder_id, currency, timezone")
+        .select("id, name, slug, meta_ad_account_id, currency, timezone, is_active")
+        .eq("is_active", true)
         .order("name");
 
       if (error) return { content: [{ type: "text" as const, text: `Fejl: ${error.message}` }] };
 
       const list = (data || [])
         .map((c: any) => [
-          `**${c.name}** (id: ${c.id})`,
-          `  Meta: ${c.meta_account_id || "–"}`,
-          `  Klaviyo: ${c.klaviyo_account_id || "–"}`,
-          `  Drive: ${c.google_drive_folder_id || "–"}`,
+          `**${c.name}** (slug: ${c.slug}, id: ${c.id})`,
+          `  Meta: ${c.meta_ad_account_id || "–"}`,
           `  Valuta: ${c.currency || "DKK"} | TZ: ${c.timezone || "Europe/Copenhagen"}`,
         ].join("\n"))
         .join("\n\n");
@@ -90,7 +89,7 @@ export function createMcpServer(): McpServer {
 
       let query = sb
         .from("insights")
-        .select("date, spend, impressions, clicks, reach, purchases, purchase_value, video_views_3s")
+        .select("date, spend, impressions, clicks, reach, purchases, purchase_value, video_views")
         .eq("client_id", client.id)
         .gte("date", since)
         .lte("date", until);
@@ -105,7 +104,7 @@ export function createMcpServer(): McpServer {
         reach: acc.reach + (r.reach || 0),
         purchases: acc.purchases + (r.purchases || 0),
         purchase_value: acc.purchase_value + (r.purchase_value || 0),
-        video_views: acc.video_views + (r.video_views_3s || 0),
+        video_views: acc.video_views + (r.video_views || 0),
       }), { spend: 0, impressions: 0, clicks: 0, reach: 0, purchases: 0, purchase_value: 0, video_views: 0 });
 
       const roas = agg.spend > 0 ? (agg.purchase_value / agg.spend).toFixed(2) : "–";
@@ -369,16 +368,14 @@ export function createMcpServer(): McpServer {
       const client = clients[0];
       const { since, until } = resolveDateRange(time_range);
 
-      let tableName = "demographic_insights";
-      let groupByField = breakdown === "placement" ? "placement" : breakdown;
-
-      if (breakdown === "placement") {
-        tableName = "placement_insights";
-      }
+      // Map breakdown to actual table + column names
+      const isPlacement = breakdown === "placement";
+      const tableName = isPlacement ? "placement_insights" : "demographic_insights";
+      const groupByField = breakdown === "age" ? "age_range" : breakdown;
 
       const { data: rawRows, error } = await sb
         .from(tableName)
-        .select(`${groupByField}, spend, purchase_value, purchases, impressions, clicks`)
+        .select(`${groupByField}, spend, revenue, purchases, impressions, clicks`)
         .eq("client_id", client.id)
         .gte("date", since)
         .lte("date", until);
@@ -390,22 +387,23 @@ export function createMcpServer(): McpServer {
       const byDim: Record<string, any> = {};
       for (const r of rows) {
         const key = (r as any)[groupByField] || "Ukendt";
-        if (!byDim[key]) byDim[key] = { spend: 0, purchase_value: 0, purchases: 0, impressions: 0, clicks: 0 };
+        if (!byDim[key]) byDim[key] = { spend: 0, revenue: 0, purchases: 0, impressions: 0, clicks: 0 };
         byDim[key].spend += r.spend || 0;
-        byDim[key].purchase_value += r.purchase_value || 0;
+        byDim[key].revenue += r.revenue || 0;
         byDim[key].purchases += r.purchases || 0;
         byDim[key].impressions += r.impressions || 0;
         byDim[key].clicks += r.clicks || 0;
       }
 
       const rows2 = Object.entries(byDim)
-        .map(([dim, m]: any) => ({ dim, ...m, roas: m.spend > 0 ? m.purchase_value / m.spend : 0 }))
+        .map(([dim, m]: any) => ({ dim, ...m, roas: m.spend > 0 ? m.revenue / m.spend : 0 }))
         .sort((a: any, b: any) => b.spend - a.spend);
 
+      const label = breakdown === "age" ? "Alder" : breakdown === "gender" ? "Køn" : "Placement";
       const lines = [
-        `## ${client.name} – Breakdown: ${breakdown} (${time_range})`,
+        `## ${client.name} – Breakdown: ${label} (${time_range})`,
         ``,
-        `| ${breakdown} | Spend | ROAS | Køb |`,
+        `| ${label} | Spend | ROAS | Køb |`,
         `|------------|-------|------|-----|`,
         ...rows2.map((r: any) =>
           `| ${r.dim} | ${formatCurrency(r.spend)} | ${r.roas.toFixed(2)}x | ${r.purchases.toFixed(0)} |`

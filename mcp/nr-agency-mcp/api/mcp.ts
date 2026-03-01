@@ -71,8 +71,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Connect server to transport
     await server.connect(transport);
 
-    // Handle the incoming request
-    await transport.handleRequest(req, res);
+    // Handle the incoming request — pass req.body explicitly
+    // because Vercel already parsed the body from the stream
+    await transport.handleRequest(req, res, req.body);
   } catch (err: any) {
     console.error("MCP handler error:", err);
     if (!res.headersSent) {
