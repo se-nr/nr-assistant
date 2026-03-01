@@ -8,7 +8,7 @@
 
 NR_assistant er Neble+Rohdes interne AI-system der giver hele teamet adgang til:
 
-1. **6 agency skills** — guided workflows til onboarding, briefs, creative, analyse, review og research
+1. **7 agency skills** — guided workflows til onboarding, research, strategi, briefs, creative, analyse og review
 2. **Automatisk data** — performance-data fra Supabase (Meta Ads, Klaviyo) uden at åbne Ads Manager
 3. **Source-grounded research** — query NotebookLM notebooks direkte fra Claude
 
@@ -42,7 +42,7 @@ Installeren kopierer skills, opsætter MCP-konfiguration og checker at agency-co
 
 ---
 
-## De 6 skills
+## De 7 skills
 
 ### `/agency-onboard` — Ny klient
 Guided onboarding med spørgsmål om brand, TOV, platforme, mål.
@@ -58,6 +58,15 @@ Falder tilbage til web research hvis ingen notebook.
 **Output:** `~/agency-context/clients/[klient]/context/research-sources.md`
 
 **Eksempel:** "Kør research for Zizzi"
+
+---
+
+### `/agency-strategy` — Brand & marketingstrategi *(ny — fase-baseret)*
+Komplet strategi i 5 faser med checkpoints: Context → Research → Planning → Execution → Review.
+Brugeren godkender hver fase før næste starter.
+**Output:** `~/agency-context/clients/[klient]/strategies/[dato]-[emne].md`
+
+**Eksempel:** "Lav en marketingstrategi for Zizzi Q2"
 
 ---
 
@@ -147,6 +156,7 @@ clients/
 │   ├── history.md           ← Læringsmomenter over tid
 │   ├── context/
 │   │   └── research-sources.md  ← VoC, konkurrenter
+│   ├── strategies/          ← Brand & marketingstrategier
 │   ├── briefs/              ← Kampagne-briefs
 │   ├── creatives/           ← Genereret copy
 │   └── monthly-*-report.md  ← Månedlige rapporter

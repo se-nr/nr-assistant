@@ -42,6 +42,7 @@ SKILLS=(
   "agency-analyze"
   "agency-review"
   "agency-research"
+  "agency-strategy"
 )
 
 for skill in "${SKILLS[@]}"; do
@@ -136,5 +137,5 @@ done
 echo "     /notebooklm (query, list, search)"
 echo ""
 echo "  5. Slash commands (shortcuts):"
-echo "     /onboard, /brief, /creative, /analyze, /review, /research"
+echo "     /onboard, /brief, /creative, /analyze, /review, /research, /strategy"
 echo ""
