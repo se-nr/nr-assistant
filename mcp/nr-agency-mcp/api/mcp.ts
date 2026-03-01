@@ -50,6 +50,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         "save_client_document",
         "get_demographic_breakdown",
         "trigger_sync",
+        "get_campaigns",
+        "get_ad_sets",
+        "get_creatives",
+        "get_campaign_details",
+        "compare_periods",
+        "get_country_breakdown",
+        "get_lead_cohorts",
+        "get_leads",
+        "get_lead_orders",
+        "get_hourly_data",
+        "get_targets",
       ],
     });
     return;
