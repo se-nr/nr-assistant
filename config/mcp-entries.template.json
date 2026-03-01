@@ -1,0 +1,10 @@
+{
+  "notebooklm": {
+    "command": "/bin/bash",
+    "args": ["__HOME__/.claude/skills/notebooklm/start_mcp.sh"]
+  },
+  "nr-agency": {
+    "command": "node",
+    "args": ["__HOME__/.claude/nr-assistant/mcp/nr-agency-mcp/dist/index.js"]
+  }
+}
