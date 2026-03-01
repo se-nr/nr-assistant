@@ -18,6 +18,11 @@ Hvis et klient-navn er angivet som argument:
 1. Load ~/agency-context/clients/[klient-navn]/overview.md
 2. Load ~/agency-context/clients/[klient-navn]/history.md (for historiske benchmarks)
 
+**Data-kilder (prioriteret):**
+1. Hvis N+R Agency MCP er tilgængelig (Claude Desktop): brug `get_performance` og `get_top_ads` tools automatisk
+2. Hvis brugeren indsætter data direkte (CSV, screenshot, tal): brug det
+3. Spørg brugeren om data-kilde hvis hverken MCP eller direkte data er tilgængeligt
+
 Attribution-regel (må ALDRIG glemmes):
 - Angiv altid ROAS 7d_click+1d_view OG ROAS 1d_click
 - Sammenlign med agency-benchmarks for klientens segment
