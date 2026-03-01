@@ -121,14 +121,42 @@ cd ~/.claude/skills/notebooklm && python scripts/run.py ask_question.py \
 Stil follow-up spørgsmål for hvert svar der er ufuldstændigt.
 Kombiner alle svar til syntese inden Trin 5.
 
-## Trin 4b: Web Research Fallback (kun hvis ingen notebook)
+## Trin 4b: Web Research (hvis ingen notebook, ELLER som supplement)
 
-Kør parallelt:
-- Trustpilot-søgning: `[brand] site:trustpilot.com/review`
-- Reddit: `[brand] OR [kategori] site:reddit.com`
-- Konkurrenter: top 3-5 brands i kategorien, hvad siger de på forsiden?
+Kør dette uanset om NotebookLM blev brugt — web research supplerer altid.
+Brug WebSearch til at finde sider, WebFetch til at hente indhold.
 
-Indsaml minimum 10 VoC-citater (5 positive, 5 negative).
+**4b.1 – Trustpilot VoC:**
+1. WebSearch: `[brand] site:trustpilot.com/review`
+2. WebFetch Trustpilot-siden → udtræk de seneste 10-20 anmeldelser
+3. Kategorisér: positive temaer, negative temaer, gennemgående sprog
+
+**4b.2 – Reddit/forum VoC:**
+1. WebSearch: `[brand] OR [produktkategori] site:reddit.com`
+2. WebFetch de 3-5 mest relevante tråde
+3. Udtræk: ærlige meninger, sprog kunderne bruger, indvendinger
+
+**4b.3 – Konkurrentanalyse:**
+1. WebSearch: `[kategori] brands [land]` eller `best [produkttype] [land]`
+2. Identificér top 3-5 konkurrenter
+3. WebFetch hver konkurrents forside + "om os"-side
+4. Notér: positionering, prisklasse, USP'er, tone, hvad de lover
+
+**4b.4 – Brand's egen kommunikation:**
+1. WebFetch brandets hjemmeside (forside + evt. "om os")
+2. WebSearch: `[brand]` → se hvad der kommer op (presseomtaler, anmeldelser)
+3. Notér: sproget de bruger om sig selv, claims, visuel stil
+
+**4b.5 – Kategori-trends (valgfrit men værdifuldt):**
+1. WebSearch: `[kategori] trends 2026` eller `[kategori] market`
+2. WebFetch 1-2 relevante artikler
+3. Notér: hvad bevæger sig i kategorien, hvad er kunderne optagede af
+
+**Minimum output fra web research:**
+- 10 VoC-citater (5 positive, 5 negative) med kilde-URL
+- 3-5 konkurrenter med positionering og USP
+- Brandets eget sprog og claims
+- Kategori-kontekst (hvad sker der i markedet)
 
 ## Trin 5: Gem output
 
