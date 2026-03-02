@@ -9,6 +9,14 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
+import { dashboardFetch } from "./dashboard-client.js";
+import type {
+  InsightsResponse,
+  TopAdsResponse,
+  DemographicsResponse,
+  TargetsResponse,
+  LeadCohortsResponse,
+} from "./types/dashboard-api.js";
 
 // ─── Supabase setup ─────────────────────────────────────────────────────────
 
@@ -75,63 +83,56 @@ export function createMcpServer(): McpServer {
     },
     async ({ client_name, time_range, funnel_stage }) => {
       const sb = getSupabase();
-
-      const { data: clients } = await sb
-        .from("clients")
-        .select("id, name")
-        .ilike("name", `%${client_name}%`)
-        .limit(1);
-
-      if (!clients?.length) {
-        return { content: [{ type: "text" as const, text: `Ingen klient fundet med navn "${client_name}"` }] };
-      }
-      const client = clients[0];
+      const client = await findClient(sb, client_name);
+      if (!client) return noClient(client_name);
 
       const { since, until } = resolveDateRange(time_range);
 
-      let query = sb
-        .from("insights")
-        .select("date, spend, impressions, clicks, reach, purchases, purchase_value, video_views")
-        .eq("client_id", client.id)
-        .gte("date", since)
-        .lte("date", until);
+      try {
+        const data = await dashboardFetch<InsightsResponse>("/api/dashboard/insights", {
+          clientId: client.id,
+          from: since,
+          to: until,
+          comparison: "none",
+        });
 
-      const { data: rows, error } = await query;
-      if (error) return { content: [{ type: "text" as const, text: `Fejl: ${error.message}` }] };
+        const s = data.summary;
+        if (!s) return text(`Ingen data for ${client.name} i perioden ${since} → ${until}`);
 
-      const agg = (rows || []).reduce((acc: any, r: any) => ({
-        spend: acc.spend + (r.spend || 0),
-        impressions: acc.impressions + (r.impressions || 0),
-        clicks: acc.clicks + (r.clicks || 0),
-        reach: acc.reach + (r.reach || 0),
-        purchases: acc.purchases + (r.purchases || 0),
-        purchase_value: acc.purchase_value + (r.purchase_value || 0),
-        video_views: acc.video_views + (r.video_views || 0),
-      }), { spend: 0, impressions: 0, clicks: 0, reach: 0, purchases: 0, purchase_value: 0, video_views: 0 });
+        const channelLines = (data.channelBreakdown || []).map((ch: any) =>
+          `| ${ch.channel} | ${formatCurrency(ch.spend)} | ${ch.roas?.toFixed(2) || "–"}x | ${ch.purchases || 0} |`
+        );
 
-      const roas = agg.spend > 0 ? (agg.purchase_value / agg.spend).toFixed(2) : "–";
-      const ctr = agg.impressions > 0 ? ((agg.clicks / agg.impressions) * 100).toFixed(2) : "–";
-      const cpa = agg.purchases > 0 ? (agg.spend / agg.purchases).toFixed(0) : "–";
+        const report = [
+          `## ${client.name} – Performance (${time_range})`,
+          `Periode: ${since} → ${until}`,
+          ``,
+          `| Metric | Værdi |`,
+          `|--------|-------|`,
+          `| Spend | ${formatCurrency(s.spend)} |`,
+          `| Omsætning | ${formatCurrency(s.purchase_value)} |`,
+          `| ROAS | ${s.roas?.toFixed(2) || "–"}x |`,
+          `| Køb | ${Math.round(s.purchases)} |`,
+          `| CPA | ${s.cpa ? Math.round(s.cpa) + " kr" : "–"} |`,
+          `| Reach | ${formatNum(s.reach)} |`,
+          `| Impressions | ${formatNum(s.impressions)} |`,
+          `| Klik | ${formatNum(s.clicks)} |`,
+          `| CTR | ${s.ctr?.toFixed(2) || "–"}% |`,
+          `| CPM | ${s.cpm ? Math.round(s.cpm) + " kr" : "–"} |`,
+          `| Videovisninger (3s) | ${formatNum(s.video_views)} |`,
+          ...(channelLines.length > 1 ? [
+            ``,
+            `### Kanalopdeling`,
+            `| Kanal | Spend | ROAS | Køb |`,
+            `|-------|-------|------|-----|`,
+            ...channelLines,
+          ] : []),
+        ].join("\n");
 
-      const report = [
-        `## ${client.name} – Performance (${time_range})`,
-        `Periode: ${since} → ${until}`,
-        ``,
-        `| Metric | Værdi |`,
-        `|--------|-------|`,
-        `| Spend | ${formatCurrency(agg.spend)} |`,
-        `| Omsætning | ${formatCurrency(agg.purchase_value)} |`,
-        `| ROAS | ${roas}x |`,
-        `| Køb | ${agg.purchases.toFixed(0)} |`,
-        `| CPA | ${cpa} kr |`,
-        `| Reach | ${formatNum(agg.reach)} |`,
-        `| Impressions | ${formatNum(agg.impressions)} |`,
-        `| Klik | ${formatNum(agg.clicks)} |`,
-        `| CTR | ${ctr}% |`,
-        `| Videovisninger (3s) | ${formatNum(agg.video_views)} |`,
-      ].join("\n");
-
-      return { content: [{ type: "text" as const, text: report }] };
+        return text(report);
+      } catch (e: any) {
+        return err(`Dashboard API: ${e.message}`);
+      }
     }
   );
 
@@ -148,76 +149,42 @@ export function createMcpServer(): McpServer {
     },
     async ({ client_name, time_range, sort_by, limit }) => {
       const sb = getSupabase();
+      const client = await findClient(sb, client_name);
+      if (!client) return noClient(client_name);
 
-      const { data: clients } = await sb
-        .from("clients")
-        .select("id, name")
-        .ilike("name", `%${client_name}%`)
-        .limit(1);
-
-      if (!clients?.length) {
-        return { content: [{ type: "text" as const, text: `Ingen klient fundet: "${client_name}"` }] };
-      }
-      const client = clients[0];
       const { since, until } = resolveDateRange(time_range);
 
-      const { data: rows, error } = await sb
-        .from("insights")
-        .select("ad_id, spend, impressions, clicks, purchases, purchase_value")
-        .eq("client_id", client.id)
-        .gte("date", since)
-        .lte("date", until)
-        .not("ad_id", "is", null);
+      try {
+        const data = await dashboardFetch<TopAdsResponse>("/api/internal/top-ads", {
+          clientId: client.id,
+          from: since,
+          to: until,
+          sort_by,
+          limit,
+        });
 
-      if (error) return { content: [{ type: "text" as const, text: `Fejl: ${error.message}` }] };
+        const ads = data.ads || [];
+        if (!ads.length) return text(`Ingen annoncer med data for ${client.name} i perioden`);
 
-      const byAd: Record<string, any> = {};
-      for (const r of rows || []) {
-        if (!byAd[r.ad_id]) {
-          byAd[r.ad_id] = { ad_id: r.ad_id, spend: 0, impressions: 0, clicks: 0, purchases: 0, purchase_value: 0 };
-        }
-        byAd[r.ad_id].spend += r.spend || 0;
-        byAd[r.ad_id].impressions += r.impressions || 0;
-        byAd[r.ad_id].clicks += r.clicks || 0;
-        byAd[r.ad_id].purchases += r.purchases || 0;
-        byAd[r.ad_id].purchase_value += r.purchase_value || 0;
+        const lines = [
+          `## ${client.name} – Top ${limit} annoncer (${time_range}, sorteret efter ${sort_by})`,
+          ``,
+          `| # | Annonce | Spend | ROAS | Køb | CTR |`,
+          `|---|---------|-------|------|-----|-----|`,
+          ...ads.map((a, i) => [
+            `| ${i + 1}`,
+            `\`${a.name}\``,
+            `${formatCurrency(a.spend)}`,
+            `${a.roas.toFixed(2)}x`,
+            `${Math.round(a.purchases)}`,
+            `${a.ctr.toFixed(2)}%`,
+          ].join(" | ") + " |"),
+        ];
+
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(`Dashboard API: ${e.message}`);
       }
-
-      const ads = Object.values(byAd).map((a: any) => ({
-        ...a,
-        roas: a.spend > 0 ? a.purchase_value / a.spend : 0,
-        ctr: a.impressions > 0 ? (a.clicks / a.impressions) * 100 : 0,
-      }));
-
-      const sorted = ads.sort((a: any, b: any) => b[sort_by] - a[sort_by]).slice(0, limit);
-
-      const adIds = sorted.map((a: any) => a.ad_id);
-      const { data: adNames } = await sb
-        .from("ads")
-        .select("id, name, campaign_id")
-        .in("id", adIds);
-
-      const nameMap: Record<string, string> = {};
-      for (const a of adNames || []) {
-        nameMap[a.id] = a.name || a.id;
-      }
-
-      const lines = [
-        `## ${client.name} – Top ${limit} annoncer (${time_range}, sorteret efter ${sort_by})`,
-        ``,
-        `| # | Annonce | Spend | ROAS | Køb | CTR |`,
-        `|---|---------|-------|------|-----|-----|`,
-        ...sorted.map((a: any, i: number) => [
-          `| ${i + 1}`,
-          `\`${nameMap[a.ad_id] || a.ad_id}\``,
-          `${formatCurrency(a.spend)}`,
-          `${a.roas.toFixed(2)}x`,
-          `${a.purchases.toFixed(0)}`,
-          `${a.ctr.toFixed(2)}%`,
-        ].join(" | ") + " |"),
-      ];
-
-      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
     }
   );
 
@@ -349,70 +316,47 @@ export function createMcpServer(): McpServer {
 
   server.tool(
     "get_demographic_breakdown",
-    "Demografisk breakdown for en klient (alder, køn, placement) med ROAS og spend",
+    "Demografisk breakdown for en klient (alder, køn, platform, placement, device) med ROAS og spend",
     {
       client_name: z.string(),
       time_range: z.string().default("last_30d").describe(TIME_RANGE_DESC),
-      breakdown: z.enum(["age", "gender", "placement"]).default("age"),
+      breakdown: z.enum(["age", "gender", "platform", "placement", "device"]).default("age"),
     },
     async ({ client_name, time_range, breakdown }) => {
       const sb = getSupabase();
+      const client = await findClient(sb, client_name);
+      if (!client) return noClient(client_name);
 
-      const { data: clients } = await sb
-        .from("clients")
-        .select("id, name")
-        .ilike("name", `%${client_name}%`)
-        .limit(1);
-
-      if (!clients?.length) {
-        return { content: [{ type: "text" as const, text: `Ingen klient: "${client_name}"` }] };
-      }
-      const client = clients[0];
       const { since, until } = resolveDateRange(time_range);
 
-      // Map breakdown to actual table + column names
-      const isPlacement = breakdown === "placement";
-      const tableName = isPlacement ? "placement_insights" : "demographic_insights";
-      const groupByField = breakdown === "age" ? "age_range" : breakdown;
+      try {
+        const data = await dashboardFetch<DemographicsResponse>("/api/internal/demographics", {
+          clientId: client.id,
+          from: since,
+          to: until,
+          breakdown,
+        });
 
-      const { data: rawRows, error } = await sb
-        .from(tableName)
-        .select(`${groupByField}, spend, revenue, purchases, impressions, clicks`)
-        .eq("client_id", client.id)
-        .gte("date", since)
-        .lte("date", until);
+        const rows = data.data || [];
+        if (!rows.length) return text(`Ingen ${breakdown}-data for ${client.name} i perioden`);
 
-      if (error) return { content: [{ type: "text" as const, text: `Fejl: ${error.message}` }] };
+        const totalSpend = rows.reduce((s, r) => s + r.spend, 0);
+        const label: Record<string, string> = { age: "Alder", gender: "Køn", platform: "Platform", placement: "Placement", device: "Device" };
 
-      const rows = rawRows as any[] || [];
+        const lines = [
+          `## ${client.name} – Breakdown: ${label[breakdown] || breakdown} (${time_range})`,
+          ``,
+          `| ${label[breakdown] || breakdown} | Spend | % | ROAS | CTR | Køb |`,
+          `|------------|-------|---|------|-----|-----|`,
+          ...rows.map((r) =>
+            `| ${r.dimension} | ${formatCurrency(r.spend)} | ${totalSpend > 0 ? (r.spend / totalSpend * 100).toFixed(1) : "0"}% | ${r.roas.toFixed(2)}x | ${r.ctr.toFixed(2)}% | ${Math.round(r.purchases)} |`
+          ),
+        ];
 
-      const byDim: Record<string, any> = {};
-      for (const r of rows) {
-        const key = (r as any)[groupByField] || "Ukendt";
-        if (!byDim[key]) byDim[key] = { spend: 0, revenue: 0, purchases: 0, impressions: 0, clicks: 0 };
-        byDim[key].spend += r.spend || 0;
-        byDim[key].revenue += r.revenue || 0;
-        byDim[key].purchases += r.purchases || 0;
-        byDim[key].impressions += r.impressions || 0;
-        byDim[key].clicks += r.clicks || 0;
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(`Dashboard API: ${e.message}`);
       }
-
-      const rows2 = Object.entries(byDim)
-        .map(([dim, m]: any) => ({ dim, ...m, roas: m.spend > 0 ? m.revenue / m.spend : 0 }))
-        .sort((a: any, b: any) => b.spend - a.spend);
-
-      const label = breakdown === "age" ? "Alder" : breakdown === "gender" ? "Køn" : "Placement";
-      const lines = [
-        `## ${client.name} – Breakdown: ${label} (${time_range})`,
-        ``,
-        `| ${label} | Spend | ROAS | Køb |`,
-        `|------------|-------|------|-----|`,
-        ...rows2.map((r: any) =>
-          `| ${r.dim} | ${formatCurrency(r.spend)} | ${r.roas.toFixed(2)}x | ${r.purchases.toFixed(0)} |`
-        ),
-      ];
-
-      return { content: [{ type: "text" as const, text: lines.join("\n") }] };
     }
   );
 
@@ -615,6 +559,7 @@ export function createMcpServer(): McpServer {
       const client = await findClient(sb, client_name);
       if (!client) return noClient(client_name);
 
+      // Metadata from Supabase (campaign info + ad sets)
       const { data: camps } = await sb
         .from("campaigns")
         .select("id, name, status, objective, daily_budget, lifetime_budget, meta_campaign_id")
@@ -625,57 +570,66 @@ export function createMcpServer(): McpServer {
       if (!camps?.length) return text(`Ingen kampagne fundet: "${campaign_name}"`);
       const camp = camps[0];
 
-      // Hent ad sets
-      const { data: adSets } = await sb
-        .from("ad_sets")
-        .select("id, name, status, optimization_goal, daily_budget")
-        .eq("campaign_id", camp.id);
-
-      // Hent aggregeret performance
       const { since, until } = resolveDateRange(time_range);
-      const { data: rows } = await sb
-        .from("insights")
-        .select("spend, impressions, clicks, purchases, purchase_value, reach")
-        .eq("client_id", client.id)
-        .eq("campaign_id", camp.id)
-        .gte("date", since)
-        .lte("date", until);
 
-      const agg = (rows || []).reduce((acc: any, r: any) => ({
-        spend: acc.spend + (r.spend || 0),
-        impressions: acc.impressions + (r.impressions || 0),
-        clicks: acc.clicks + (r.clicks || 0),
-        purchases: acc.purchases + (r.purchases || 0),
-        purchase_value: acc.purchase_value + (r.purchase_value || 0),
-        reach: acc.reach + (r.reach || 0),
-      }), { spend: 0, impressions: 0, clicks: 0, purchases: 0, purchase_value: 0, reach: 0 });
+      // Parallel: ad sets from Supabase + metrics from dashboard API
+      try {
+        const [adSetsResult, metricsData] = await Promise.all([
+          sb.from("ad_sets")
+            .select("id, name, status, optimization_goal, daily_budget")
+            .eq("campaign_id", camp.id),
+          dashboardFetch<InsightsResponse>("/api/dashboard/insights", {
+            clientId: client.id,
+            from: since,
+            to: until,
+            campaignId: camp.id,
+            comparison: "none",
+          }),
+        ]);
 
-      const roas = agg.spend > 0 ? (agg.purchase_value / agg.spend).toFixed(2) : "–";
+        const adSets = adSetsResult.data || [];
+        const s = metricsData.summary;
 
-      const lines = [
-        `## ${camp.name}`,
-        `Status: ${camp.status} | Objektiv: ${camp.objective || "–"}`,
-        `Meta ID: ${camp.meta_campaign_id}`,
-        ``,
-        `### Performance (${time_range})`,
-        `| Metric | Værdi |`,
-        `|--------|-------|`,
-        `| Spend | ${formatCurrency(agg.spend)} |`,
-        `| Omsætning | ${formatCurrency(agg.purchase_value)} |`,
-        `| ROAS | ${roas}x |`,
-        `| Køb | ${agg.purchases} |`,
-        `| Klik | ${formatNum(agg.clicks)} |`,
-        `| Reach | ${formatNum(agg.reach)} |`,
-        ``,
-        `### Ad Sets (${(adSets || []).length} stk)`,
-        `| Ad Set | Status | Optimering | Budget |`,
-        `|--------|--------|------------|--------|`,
-        ...(adSets || []).map((a: any) =>
-          `| \`${a.name}\` | ${a.status} | ${a.optimization_goal || "–"} | ${a.daily_budget ? formatCurrency(a.daily_budget) + "/dag" : "–"} |`
-        ),
-      ];
+        const lines = [
+          `## ${camp.name}`,
+          `Status: ${camp.status} | Objektiv: ${camp.objective || "–"}`,
+          `Meta ID: ${camp.meta_campaign_id}`,
+          ``,
+          `### Performance (${time_range})`,
+          `| Metric | Værdi |`,
+          `|--------|-------|`,
+        ];
 
-      return text(lines.join("\n"));
+        if (s) {
+          lines.push(
+            `| Spend | ${formatCurrency(s.spend)} |`,
+            `| Omsætning | ${formatCurrency(s.purchase_value)} |`,
+            `| ROAS | ${Number(s.roas).toFixed(2)}x |`,
+            `| Køb | ${Math.round(s.purchases)} |`,
+            `| Klik | ${formatNum(s.clicks)} |`,
+            `| CTR | ${Number(s.ctr).toFixed(2)}% |`,
+            `| CPM | ${Math.round(s.cpm)} kr |`,
+            `| CPA | ${s.purchases > 0 ? Math.round(s.cpa) + " kr" : "–"} |`,
+            `| Reach | ${formatNum(s.reach)} |`,
+          );
+        } else {
+          lines.push(`| _Ingen data_ | – |`);
+        }
+
+        lines.push(
+          ``,
+          `### Ad Sets (${adSets.length} stk)`,
+          `| Ad Set | Status | Optimering | Budget |`,
+          `|--------|--------|------------|--------|`,
+          ...adSets.map((a: any) =>
+            `| \`${a.name}\` | ${a.status} | ${a.optimization_goal || "–"} | ${a.daily_budget ? formatCurrency(a.daily_budget) + "/dag" : "–"} |`
+          ),
+        );
+
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(`Dashboard API: ${e.message}`);
+      }
     }
   );
 
@@ -694,53 +648,58 @@ export function createMcpServer(): McpServer {
       const client = await findClient(sb, client_name);
       if (!client) return noClient(client_name);
 
-      async function getPeriodAgg(range: string) {
-        const { since, until } = resolveDateRange(range);
-        const { data: rows } = await sb
-          .from("insights")
-          .select("spend, impressions, clicks, reach, purchases, purchase_value")
-          .eq("client_id", client!.id)
-          .gte("date", since)
-          .lte("date", until);
+      const rangeA = resolveDateRange(period_a);
+      const rangeB = resolveDateRange(period_b);
 
-        const agg = (rows || []).reduce((acc: any, r: any) => ({
-          spend: acc.spend + (r.spend || 0),
-          impressions: acc.impressions + (r.impressions || 0),
-          clicks: acc.clicks + (r.clicks || 0),
-          reach: acc.reach + (r.reach || 0),
-          purchases: acc.purchases + (r.purchases || 0),
-          purchase_value: acc.purchase_value + (r.purchase_value || 0),
-        }), { spend: 0, impressions: 0, clicks: 0, reach: 0, purchases: 0, purchase_value: 0 });
+      try {
+        const [dataA, dataB] = await Promise.all([
+          dashboardFetch<InsightsResponse>("/api/dashboard/insights", {
+            clientId: client.id,
+            from: rangeA.since,
+            to: rangeA.until,
+            comparison: "none",
+          }),
+          dashboardFetch<InsightsResponse>("/api/dashboard/insights", {
+            clientId: client.id,
+            from: rangeB.since,
+            to: rangeB.until,
+            comparison: "none",
+          }),
+        ]);
 
-        return { ...agg, range, since, until, roas: agg.spend > 0 ? agg.purchase_value / agg.spend : 0, ctr: agg.impressions > 0 ? (agg.clicks / agg.impressions) * 100 : 0 };
+        const a = dataA.summary;
+        const b = dataB.summary;
+
+        if (!a && !b) return text(`Ingen data for ${client.name} i nogen af perioderne`);
+
+        function val(s: any, key: string): number { return s ? (Number(s[key]) || 0) : 0; }
+        function delta(va: number, vb: number): string {
+          if (vb === 0) return va > 0 ? "+∞" : "0%";
+          const pct = ((va - vb) / vb * 100).toFixed(1);
+          return `${Number(pct) >= 0 ? "+" : ""}${pct}%`;
+        }
+
+        const lines = [
+          `## ${client.name} – Periodesammenligning`,
+          `**A:** ${period_a} (${rangeA.since} → ${rangeA.until})`,
+          `**B:** ${period_b} (${rangeB.since} → ${rangeB.until})`,
+          ``,
+          `| Metric | Periode A | Periode B | Δ |`,
+          `|--------|-----------|-----------|---|`,
+          `| Spend | ${formatCurrency(val(a, "spend"))} | ${formatCurrency(val(b, "spend"))} | ${delta(val(a, "spend"), val(b, "spend"))} |`,
+          `| Omsætning | ${formatCurrency(val(a, "purchase_value"))} | ${formatCurrency(val(b, "purchase_value"))} | ${delta(val(a, "purchase_value"), val(b, "purchase_value"))} |`,
+          `| ROAS | ${val(a, "roas").toFixed(2)}x | ${val(b, "roas").toFixed(2)}x | ${delta(val(a, "roas"), val(b, "roas"))} |`,
+          `| Køb | ${Math.round(val(a, "purchases"))} | ${Math.round(val(b, "purchases"))} | ${delta(val(a, "purchases"), val(b, "purchases"))} |`,
+          `| Klik | ${formatNum(val(a, "clicks"))} | ${formatNum(val(b, "clicks"))} | ${delta(val(a, "clicks"), val(b, "clicks"))} |`,
+          `| CTR | ${val(a, "ctr").toFixed(2)}% | ${val(b, "ctr").toFixed(2)}% | ${delta(val(a, "ctr"), val(b, "ctr"))} |`,
+          `| CPM | ${Math.round(val(a, "cpm"))} kr | ${Math.round(val(b, "cpm"))} kr | ${delta(val(a, "cpm"), val(b, "cpm"))} |`,
+          `| Reach | ${formatNum(val(a, "reach"))} | ${formatNum(val(b, "reach"))} | ${delta(val(a, "reach"), val(b, "reach"))} |`,
+        ];
+
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(`Dashboard API: ${e.message}`);
       }
-
-      const a = await getPeriodAgg(period_a);
-      const b = await getPeriodAgg(period_b);
-
-      function delta(va: number, vb: number): string {
-        if (vb === 0) return va > 0 ? "+∞" : "0%";
-        const pct = ((va - vb) / vb * 100).toFixed(1);
-        return `${Number(pct) >= 0 ? "+" : ""}${pct}%`;
-      }
-
-      const lines = [
-        `## ${client.name} – Periodesammenligning`,
-        `**A:** ${period_a} (${a.since} → ${a.until})`,
-        `**B:** ${period_b} (${b.since} → ${b.until})`,
-        ``,
-        `| Metric | Periode A | Periode B | Δ |`,
-        `|--------|-----------|-----------|---|`,
-        `| Spend | ${formatCurrency(a.spend)} | ${formatCurrency(b.spend)} | ${delta(a.spend, b.spend)} |`,
-        `| Omsætning | ${formatCurrency(a.purchase_value)} | ${formatCurrency(b.purchase_value)} | ${delta(a.purchase_value, b.purchase_value)} |`,
-        `| ROAS | ${a.roas.toFixed(2)}x | ${b.roas.toFixed(2)}x | ${delta(a.roas, b.roas)} |`,
-        `| Køb | ${a.purchases} | ${b.purchases} | ${delta(a.purchases, b.purchases)} |`,
-        `| Klik | ${formatNum(a.clicks)} | ${formatNum(b.clicks)} | ${delta(a.clicks, b.clicks)} |`,
-        `| CTR | ${a.ctr.toFixed(2)}% | ${b.ctr.toFixed(2)}% | ${delta(a.ctr, b.ctr)} |`,
-        `| Reach | ${formatNum(a.reach)} | ${formatNum(b.reach)} | ${delta(a.reach, b.reach)} |`,
-      ];
-
-      return text(lines.join("\n"));
     }
   );
 
@@ -760,45 +719,33 @@ export function createMcpServer(): McpServer {
 
       const { since, until } = resolveDateRange(time_range);
 
-      // Hent country-rækker fra demographic_insights (age_range="all", gender="all")
-      const { data: rows, error } = await sb
-        .from("demographic_insights")
-        .select("country, spend, revenue, purchases, impressions, clicks")
-        .eq("client_id", client.id)
-        .gte("date", since)
-        .lte("date", until)
-        .not("country", "is", null);
+      try {
+        const data = await dashboardFetch<DemographicsResponse>("/api/internal/demographics", {
+          clientId: client.id,
+          from: since,
+          to: until,
+          breakdown: "country",
+        });
 
-      if (error) return err(error.message);
+        const rows = data.data || [];
+        if (!rows.length) return text(`Ingen land-data for ${client.name} i perioden`);
 
-      const byCountry: Record<string, any> = {};
-      for (const r of rows || []) {
-        const key = r.country || "Ukendt";
-        if (!byCountry[key]) byCountry[key] = { spend: 0, revenue: 0, purchases: 0, impressions: 0, clicks: 0 };
-        byCountry[key].spend += r.spend || 0;
-        byCountry[key].revenue += r.revenue || 0;
-        byCountry[key].purchases += r.purchases || 0;
-        byCountry[key].impressions += r.impressions || 0;
-        byCountry[key].clicks += r.clicks || 0;
+        const totalSpend = rows.reduce((s, r) => s + r.spend, 0);
+
+        const lines = [
+          `## ${client.name} – Land-breakdown (${time_range})`,
+          ``,
+          `| Land | Spend | % | ROAS | Køb | Klik |`,
+          `|------|-------|---|------|-----|------|`,
+          ...rows.map((r) =>
+            `| ${r.dimension} | ${formatCurrency(r.spend)} | ${totalSpend > 0 ? (r.spend / totalSpend * 100).toFixed(1) : "0"}% | ${r.roas.toFixed(2)}x | ${Math.round(r.purchases)} | ${formatNum(r.clicks)} |`
+          ),
+        ];
+
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(`Dashboard API: ${e.message}`);
       }
-
-      const sorted = Object.entries(byCountry)
-        .map(([country, m]: any) => ({ country, ...m, roas: m.spend > 0 ? m.revenue / m.spend : 0 }))
-        .sort((a: any, b: any) => b.spend - a.spend);
-
-      const totalSpend = sorted.reduce((s: number, r: any) => s + r.spend, 0);
-
-      const lines = [
-        `## ${client.name} – Land-breakdown (${time_range})`,
-        ``,
-        `| Land | Spend | % | ROAS | Køb | Klik |`,
-        `|------|-------|---|------|-----|------|`,
-        ...sorted.map((r: any) =>
-          `| ${r.country} | ${formatCurrency(r.spend)} | ${totalSpend > 0 ? (r.spend / totalSpend * 100).toFixed(1) : 0}% | ${r.roas.toFixed(2)}x | ${r.purchases} | ${formatNum(r.clicks)} |`
-        ),
-      ];
-
-      return text(lines.join("\n"));
     }
   );
 
@@ -817,35 +764,63 @@ export function createMcpServer(): McpServer {
       const client = await findClient(sb, client_name);
       if (!client) return noClient(client_name);
 
-      let query = sb
-        .from("lead_cohort_snapshots")
-        .select("cohort_month, ad_set_name, months_since_lead, leads_count, converted_count, conversion_rate, total_revenue, revenue_per_lead, avg_days_to_convert, snapshot_date")
-        .eq("client_id", client.id)
-        .order("cohort_month", { ascending: false })
-        .order("months_since_lead", { ascending: true });
+      try {
+        const params: Record<string, string | number | undefined> = { clientId: client.id };
+        if (cohort_month) { params.startMonth = cohort_month; params.endMonth = cohort_month; }
 
-      if (cohort_month) query = query.eq("cohort_month", cohort_month);
-      if (ad_set_name) query = query.ilike("ad_set_name", `%${ad_set_name}%`);
+        const data = await dashboardFetch<LeadCohortsResponse>("/api/lead-cohorts", params);
 
-      // For oversigt: hent kun "samlet" rækker (ad_set_name IS NULL)
-      if (!ad_set_name) query = query.is("ad_set_name", null);
+        const cohorts = data.cohorts || [];
+        if (!cohorts.length) return text(`Ingen lead cohort data for ${client.name}`);
 
-      const { data, error } = await query;
-      if (error) return err(error.message);
+        // Filter by ad_set_name if provided (client-side filter)
+        const filteredCohorts = ad_set_name
+          ? cohorts.map((c: any) => ({
+              ...c,
+              byAdSet: (c.byAdSet || []).filter((a: any) =>
+                a.adSetName?.toLowerCase().includes(ad_set_name.toLowerCase())
+              ),
+            })).filter((c: any) => c.byAdSet.length > 0)
+          : cohorts;
 
-      if (!data?.length) return text(`Ingen lead cohort data for ${client.name}`);
+        if (ad_set_name && !filteredCohorts.length) {
+          return text(`Ingen cohorts med ad set "${ad_set_name}" for ${client.name}`);
+        }
 
-      const lines = [
-        `## ${client.name} – Lead Cohorts${cohort_month ? ` (${cohort_month})` : ""}`,
-        ``,
-        `| Cohort | Mdr | Leads | Konverteret | Conv% | Revenue | Rev/Lead | Gns. dage |`,
-        `|--------|-----|-------|-------------|-------|---------|----------|-----------|`,
-        ...data.map((r: any) =>
-          `| ${r.cohort_month} | ${r.months_since_lead} | ${r.leads_count} | ${r.converted_count} | ${r.conversion_rate?.toFixed(1) || "0"}% | ${formatCurrency(r.total_revenue || 0)} | ${formatCurrency(r.revenue_per_lead || 0)} | ${r.avg_days_to_convert?.toFixed(0) || "–"} |`
-        ),
-      ];
+        if (ad_set_name) {
+          // Show ad set breakdown
+          const lines = [
+            `## ${client.name} – Lead Cohorts (ad set: "${ad_set_name}")`,
+            ``,
+            `| Cohort | Ad Set | Leads | Conv% | Revenue | Rev/Lead |`,
+            `|--------|--------|-------|-------|---------|----------|`,
+            ...filteredCohorts.flatMap((c: any) =>
+              c.byAdSet.map((a: any) =>
+                `| ${c.month} | \`${a.adSetName}\` | ${a.leads} | ${a.convRate?.toFixed(1) || "0"}% | ${formatCurrency(a.revenue || 0)} | ${formatCurrency(a.revPerLead || 0)} |`
+              )
+            ),
+          ];
+          return text(lines.join("\n"));
+        }
 
-      return text(lines.join("\n"));
+        // Default: cohort overview with progressive ROAS
+        const summary = data.summary;
+        const lines = [
+          `## ${client.name} – Lead Cohorts${cohort_month ? ` (${cohort_month})` : ""}`,
+          ``,
+          `**Samlet:** ${summary.totalLeads} leads | ${summary.totalConverted} konverterede (${summary.overallConvRate?.toFixed(1) || "0"}%) | CPL: ${formatCurrency(summary.costPerLead || 0)}`,
+          ``,
+          `| Cohort | Leads | Conv% | Ad Spend | CPL | Revenue | ROAS | Total ROAS |`,
+          `|--------|-------|-------|----------|-----|---------|------|------------|`,
+          ...cohorts.map((c: any) =>
+            `| ${c.month} | ${c.leadsCount} | ${((c.metrics?.find((m: any) => m.daysSinceLead === 90)?.convRate) || c.metrics?.[c.metrics.length - 1]?.convRate || 0).toFixed(1)}% | ${formatCurrency(c.adSpend || 0)} | ${formatCurrency(c.costPerLead || 0)} | ${formatCurrency(c.totalRevenue || 0)} | ${c.roas?.toFixed(2) || "–"}x | ${c.totalRoas?.toFixed(2) || "–"}x |`
+          ),
+        ];
+
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(`Dashboard API: ${e.message}`);
+      }
     }
   );
 
@@ -995,67 +970,44 @@ export function createMcpServer(): McpServer {
     },
     async ({ client_name }) => {
       const sb = getSupabase();
+      const client = await findClient(sb, client_name);
+      if (!client) return noClient(client_name);
 
-      const { data: clients } = await sb
-        .from("clients")
-        .select("id, name, targets")
-        .ilike("name", `%${client_name}%`)
-        .limit(1);
+      try {
+        const data = await dashboardFetch<TargetsResponse>("/api/internal/targets", { clientId: client.id });
 
-      if (!clients?.length) return noClient(client_name);
-      const client = clients[0];
+        const targets = data.targets || {};
+        const actual = data.actuals;
 
-      const targets = client.targets || {};
-      if (Object.keys(targets).length === 0) {
-        return text(`Ingen targets sat for ${client.name}. Sæt dem i dashboard → Settings.`);
-      }
-
-      // Hent aktuel performance (last_30d) for sammenligning
-      const { since, until } = resolveDateRange("last_30d");
-      const { data: rows } = await sb
-        .from("insights")
-        .select("spend, impressions, clicks, purchases, purchase_value")
-        .eq("client_id", client.id)
-        .gte("date", since)
-        .lte("date", until);
-
-      const agg = (rows || []).reduce((acc: any, r: any) => ({
-        spend: acc.spend + (r.spend || 0),
-        impressions: acc.impressions + (r.impressions || 0),
-        clicks: acc.clicks + (r.clicks || 0),
-        purchases: acc.purchases + (r.purchases || 0),
-        purchase_value: acc.purchase_value + (r.purchase_value || 0),
-      }), { spend: 0, impressions: 0, clicks: 0, purchases: 0, purchase_value: 0 });
-
-      const actual = {
-        roas: agg.spend > 0 ? agg.purchase_value / agg.spend : 0,
-        ctr: agg.impressions > 0 ? (agg.clicks / agg.impressions) * 100 : 0,
-        cpa: agg.purchases > 0 ? agg.spend / agg.purchases : 0,
-        cpm: agg.impressions > 0 ? (agg.spend / agg.impressions) * 1000 : 0,
-      };
-
-      const lines = [
-        `## ${client.name} – Targets vs. Aktuel (last 30d)`,
-        ``,
-        `| Metric | Target | Aktuel | Status |`,
-        `|--------|--------|--------|--------|`,
-      ];
-
-      if (targets.roas) lines.push(`| ROAS | ${targets.roas}x | ${actual.roas.toFixed(2)}x | ${actual.roas >= targets.roas ? "✅" : "⚠️"} |`);
-      if (targets.ctr) lines.push(`| CTR | ${targets.ctr}% | ${actual.ctr.toFixed(2)}% | ${actual.ctr >= targets.ctr ? "✅" : "⚠️"} |`);
-      if (targets.cpa) lines.push(`| CPA | ${targets.cpa} kr | ${actual.cpa.toFixed(0)} kr | ${actual.cpa <= targets.cpa ? "✅" : "⚠️"} |`);
-      if (targets.cpm) lines.push(`| CPM | ${targets.cpm} kr | ${actual.cpm.toFixed(0)} kr | ${actual.cpm <= targets.cpm ? "✅" : "⚠️"} |`);
-
-      // Funnel-targets
-      if (targets.funnel) {
-        lines.push(``, `### Funnel-targets`);
-        for (const [stage, stageTargets] of Object.entries(targets.funnel as Record<string, any>)) {
-          const entries = Object.entries(stageTargets).map(([k, v]) => `${k}: ${v}`).join(", ");
-          lines.push(`- **${stage}**: ${entries}`);
+        if (Object.keys(targets).length === 0) {
+          return text(`Ingen targets sat for ${client.name}. Sæt dem i dashboard → Settings.`);
         }
-      }
 
-      return text(lines.join("\n"));
+        const lines = [
+          `## ${client.name} – Targets vs. Aktuel (last 30d)`,
+          ``,
+          `| Metric | Target | Aktuel | Status |`,
+          `|--------|--------|--------|--------|`,
+        ];
+
+        if (targets.roas) lines.push(`| ROAS | ${targets.roas}x | ${actual.roas.toFixed(2)}x | ${actual.roas >= targets.roas ? "✅" : "⚠️"} |`);
+        if (targets.ctr) lines.push(`| CTR | ${targets.ctr}% | ${actual.ctr.toFixed(2)}% | ${actual.ctr >= targets.ctr ? "✅" : "⚠️"} |`);
+        if (targets.cpa) lines.push(`| CPA | ${targets.cpa} kr | ${actual.cpa.toFixed(0)} kr | ${actual.cpa <= targets.cpa ? "✅" : "⚠️"} |`);
+        if (targets.cpm) lines.push(`| CPM | ${targets.cpm} kr | ${actual.cpm.toFixed(0)} kr | ${actual.cpm <= targets.cpm ? "✅" : "⚠️"} |`);
+
+        // Funnel-targets
+        if (targets.funnel) {
+          lines.push(``, `### Funnel-targets`);
+          for (const [stage, stageTargets] of Object.entries(targets.funnel as Record<string, any>)) {
+            const entries = Object.entries(stageTargets).map(([k, v]) => `${k}: ${v}`).join(", ");
+            lines.push(`- **${stage}**: ${entries}`);
+          }
+        }
+
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(`Dashboard API: ${e.message}`);
+      }
     }
   );
 
