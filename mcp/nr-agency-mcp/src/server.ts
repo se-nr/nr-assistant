@@ -21,6 +21,10 @@ function getSupabase(): SupabaseClient {
   return createClient(url, key);
 }
 
+// ─── Shared schemas ─────────────────────────────────────────────────────────
+
+const TIME_RANGE_DESC = "Tidsperiode. Presets: last_7d, last_30d, last_90d, this_month, last_month. Custom: '2026-01' (hel måned), '2026-01-01:2026-01-31' (interval), '2026-01-15' (enkelt dag)";
+
 // ─── Server factory ──────────────────────────────────────────────────────────
 
 export function createMcpServer(): McpServer {
@@ -64,9 +68,7 @@ export function createMcpServer(): McpServer {
     "Hent aggregeret performance for en klient (spend, ROAS, purchases, reach). Angiv client_name og time_range.",
     {
       client_name: z.string().describe("Klientens navn (delvis match OK, fx 'zizzi', 'gastro')"),
-      time_range: z.enum(["last_7d", "last_30d", "last_90d", "this_month", "last_month"])
-        .default("last_30d")
-        .describe("Tidsperiode"),
+      time_range: z.string().default("last_30d").describe(TIME_RANGE_DESC),
       funnel_stage: z.enum(["all", "FP", "IM", "IP", "EC"])
         .default("all")
         .describe("Filtrer på funnel-stage (all = alle)"),
@@ -140,7 +142,7 @@ export function createMcpServer(): McpServer {
     "Top-performende annoncer for en klient sorteret efter ROAS eller spend",
     {
       client_name: z.string().describe("Klientens navn"),
-      time_range: z.enum(["last_7d", "last_30d", "last_90d"]).default("last_30d"),
+      time_range: z.string().default("last_30d").describe(TIME_RANGE_DESC),
       sort_by: z.enum(["roas", "spend", "purchases", "ctr"]).default("roas"),
       limit: z.number().min(1).max(20).default(10),
     },
@@ -350,7 +352,7 @@ export function createMcpServer(): McpServer {
     "Demografisk breakdown for en klient (alder, køn, placement) med ROAS og spend",
     {
       client_name: z.string(),
-      time_range: z.enum(["last_7d", "last_30d", "last_90d"]).default("last_30d"),
+      time_range: z.string().default("last_30d").describe(TIME_RANGE_DESC),
       breakdown: z.enum(["age", "gender", "placement"]).default("age"),
     },
     async ({ client_name, time_range, breakdown }) => {
@@ -606,7 +608,7 @@ export function createMcpServer(): McpServer {
     {
       client_name: z.string().describe("Klientens navn"),
       campaign_name: z.string().describe("Kampagnenavn (delvis match OK)"),
-      time_range: z.enum(["last_7d", "last_30d", "last_90d"]).default("last_30d"),
+      time_range: z.string().default("last_30d").describe(TIME_RANGE_DESC),
     },
     async ({ client_name, campaign_name, time_range }) => {
       const sb = getSupabase();
@@ -684,8 +686,8 @@ export function createMcpServer(): McpServer {
     "Sammenlign performance mellem to perioder (fx denne måned vs forrige)",
     {
       client_name: z.string().describe("Klientens navn"),
-      period_a: z.enum(["last_7d", "last_30d", "last_90d", "this_month", "last_month"]).describe("Første periode (nyeste)"),
-      period_b: z.enum(["last_7d", "last_30d", "last_90d", "this_month", "last_month"]).describe("Anden periode (sammenligning)"),
+      period_a: z.string().describe("Første periode (nyeste). " + TIME_RANGE_DESC),
+      period_b: z.string().describe("Anden periode (sammenligning). " + TIME_RANGE_DESC),
     },
     async ({ client_name, period_a, period_b }) => {
       const sb = getSupabase();
@@ -749,7 +751,7 @@ export function createMcpServer(): McpServer {
     "Land-niveau performance fra demographic_insights (country-rækker) med spend, ROAS, køb",
     {
       client_name: z.string().describe("Klientens navn"),
-      time_range: z.enum(["last_7d", "last_30d", "last_90d"]).default("last_30d"),
+      time_range: z.string().default("last_30d").describe(TIME_RANGE_DESC),
     },
     async ({ client_name, time_range }) => {
       const sb = getSupabase();
@@ -1083,25 +1085,54 @@ function text(t: string) {
   return { content: [{ type: "text" as const, text: t }] };
 }
 
+/**
+ * Resolve a time range string to { since, until } date strings.
+ *
+ * Accepts:
+ *   - Presets: "last_7d", "last_30d", "last_90d", "this_month", "last_month"
+ *   - Month:   "2026-01" → hele januar 2026
+ *   - Range:   "2026-01-01:2026-01-31" → eksakt interval
+ *   - Single:  "2026-01-15" → kun den dag
+ */
 function resolveDateRange(range: string): { since: string; until: string } {
   const now = new Date();
-  const until = now.toISOString().split("T")[0];
-  const since = new Date(now);
+  const today = now.toISOString().split("T")[0];
 
+  // Preset ranges
   switch (range) {
-    case "last_7d":   since.setDate(now.getDate() - 7); break;
-    case "last_30d":  since.setDate(now.getDate() - 30); break;
-    case "last_90d":  since.setDate(now.getDate() - 90); break;
-    case "this_month":
-      since.setDate(1);
-      break;
-    case "last_month":
-      since.setMonth(now.getMonth() - 1, 1);
-      const lastDay = new Date(now.getFullYear(), now.getMonth(), 0);
-      return { since: since.toISOString().split("T")[0], until: lastDay.toISOString().split("T")[0] };
+    case "last_7d":   { const d = new Date(now); d.setDate(now.getDate() - 7); return { since: d.toISOString().split("T")[0], until: today }; }
+    case "last_30d":  { const d = new Date(now); d.setDate(now.getDate() - 30); return { since: d.toISOString().split("T")[0], until: today }; }
+    case "last_90d":  { const d = new Date(now); d.setDate(now.getDate() - 90); return { since: d.toISOString().split("T")[0], until: today }; }
+    case "this_month": { const d = new Date(now); d.setDate(1); return { since: d.toISOString().split("T")[0], until: today }; }
+    case "last_month": {
+      const s = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const e = new Date(now.getFullYear(), now.getMonth(), 0);
+      return { since: s.toISOString().split("T")[0], until: e.toISOString().split("T")[0] };
+    }
   }
 
-  return { since: since.toISOString().split("T")[0], until };
+  // "2026-01-01:2026-01-31" → explicit range
+  if (range.includes(":")) {
+    const [s, e] = range.split(":");
+    return { since: s, until: e };
+  }
+
+  // "2026-01" → whole month
+  if (/^\d{4}-\d{2}$/.test(range)) {
+    const [y, m] = range.split("-").map(Number);
+    const lastDay = new Date(y, m, 0).getDate();
+    return { since: `${range}-01`, until: `${range}-${String(lastDay).padStart(2, "0")}` };
+  }
+
+  // "2026-01-15" → single day
+  if (/^\d{4}-\d{2}-\d{2}$/.test(range)) {
+    return { since: range, until: range };
+  }
+
+  // Fallback
+  const d = new Date(now);
+  d.setDate(now.getDate() - 30);
+  return { since: d.toISOString().split("T")[0], until: today };
 }
 
 function formatCurrency(v: number): string {
