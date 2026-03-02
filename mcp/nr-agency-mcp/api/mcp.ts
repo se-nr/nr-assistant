@@ -2,34 +2,39 @@
  * Vercel serverless endpoint for N+R Agency MCP
  *
  * Handles MCP protocol over Streamable HTTP transport.
- * Auth: Bearer token via NR_API_KEY env var.
+ * Auth: Bearer token (static API key OR OAuth access_token).
  *
- * Claude Desktop/claude.ai connects to:
- *   POST https://your-project.vercel.app/api/mcp
+ * Claude Desktop / claude.ai / Claude Code connects to:
+ *   POST https://nr-agency-mcp.vercel.app/api/mcp
  */
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createMcpServer } from "../src/server.js";
+import { verifyToken } from "./oauth/token.js";
 
 const API_KEY = process.env.NR_API_KEY;
 
 function checkAuth(req: VercelRequest, res: VercelResponse): boolean {
-  if (!API_KEY) return true; // No key = skip auth (dev)
+  // Dev mode: no auth if no keys configured
+  if (!API_KEY && !process.env.OAUTH_SIGN_SECRET) return true;
 
   const authHeader = req.headers["authorization"];
   if (!authHeader || typeof authHeader !== "string") {
-    res.status(401).json({ error: "Missing Authorization header. Use: Bearer <api-key>" });
+    res.status(401).json({ error: "Missing Authorization header. Use: Bearer <token>" });
     return false;
   }
 
   const token = authHeader.replace(/^Bearer\s+/i, "");
-  if (token !== API_KEY) {
-    res.status(403).json({ error: "Invalid API key" });
-    return false;
-  }
 
-  return true;
+  // Accept static API key
+  if (API_KEY && token === API_KEY) return true;
+
+  // Accept OAuth access_token
+  if (verifyToken(token)) return true;
+
+  res.status(403).json({ error: "Invalid or expired token" });
+  return false;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
