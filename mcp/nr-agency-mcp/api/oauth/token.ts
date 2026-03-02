@@ -3,20 +3,29 @@
  *
  * POST /api/oauth/token
  *   grant_type=client_credentials
- *   client_id=...
- *   client_secret=...
+ *
+ * Supports two auth methods:
+ *   1. client_secret_basic — Authorization: Basic base64(client_id:client_secret)
+ *   2. client_secret_post  — client_id & client_secret in POST body
  *
  * Returns: { access_token, token_type, expires_in }
  */
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createHmac } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 
 const CLIENT_ID = process.env.OAUTH_CLIENT_ID;
 const CLIENT_SECRET = process.env.OAUTH_CLIENT_SECRET;
 const SIGN_SECRET = process.env.OAUTH_SIGN_SECRET;
 
 const TOKEN_TTL = 3600; // 1 hour
+
+function safeEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
+}
 
 function makeToken(): string {
   const exp = Math.floor(Date.now() / 1000) + TOKEN_TTL;
@@ -41,6 +50,37 @@ export function verifyToken(token: string): boolean {
   }
 }
 
+/** Extract client_id and client_secret from either Basic header or POST body */
+function extractCredentials(req: VercelRequest): { clientId: string; clientSecret: string } | null {
+  // 1. Try client_secret_basic (Authorization: Basic base64(id:secret))
+  const authHeader = req.headers["authorization"];
+  if (authHeader && typeof authHeader === "string") {
+    const match = authHeader.match(/^Basic\s+(.+)$/i);
+    if (match) {
+      try {
+        const decoded = Buffer.from(match[1], "base64").toString("utf-8");
+        const colonIdx = decoded.indexOf(":");
+        if (colonIdx > 0) {
+          return {
+            clientId: decodeURIComponent(decoded.slice(0, colonIdx)),
+            clientSecret: decodeURIComponent(decoded.slice(colonIdx + 1)),
+          };
+        }
+      } catch {
+        // Invalid base64 — fall through
+      }
+    }
+  }
+
+  // 2. Try client_secret_post (credentials in body)
+  const body = req.body;
+  if (body?.client_id && body?.client_secret) {
+    return { clientId: body.client_id, clientSecret: body.client_secret };
+  }
+
+  return null;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
     res.status(405).json({ error: "method_not_allowed" });
@@ -55,15 +95,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Accept both form-encoded and JSON bodies
   const body = req.body;
   const grantType = body?.grant_type;
-  const clientId = body?.client_id;
-  const clientSecret = body?.client_secret;
 
   if (grantType !== "client_credentials") {
     res.status(400).json({ error: "unsupported_grant_type" });
     return;
   }
 
-  if (clientId !== CLIENT_ID || clientSecret !== CLIENT_SECRET) {
+  const creds = extractCredentials(req);
+  if (!creds || !safeEqual(creds.clientId, CLIENT_ID) || !safeEqual(creds.clientSecret, CLIENT_SECRET)) {
     res.status(401).json({ error: "invalid_client" });
     return;
   }

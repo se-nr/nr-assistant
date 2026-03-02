@@ -13,7 +13,7 @@ export default function handler(_req: VercelRequest, res: VercelResponse) {
   res.status(200).json({
     issuer: BASE_URL,
     token_endpoint: `${BASE_URL}/api/oauth/token`,
-    token_endpoint_auth_methods_supported: ["client_secret_post"],
+    token_endpoint_auth_methods_supported: ["client_secret_basic", "client_secret_post"],
     grant_types_supported: ["client_credentials"],
     response_types_supported: ["token"],
   });
