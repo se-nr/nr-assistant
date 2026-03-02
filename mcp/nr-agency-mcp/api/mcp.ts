@@ -21,6 +21,10 @@ function checkAuth(req: VercelRequest, res: VercelResponse): boolean {
 
   const authHeader = req.headers["authorization"];
   if (!authHeader || typeof authHeader !== "string") {
+    res.setHeader(
+      "WWW-Authenticate",
+      'Bearer resource_metadata="https://nr-agency-mcp.vercel.app/.well-known/oauth-protected-resource"'
+    );
     res.status(401).json({ error: "Missing Authorization header. Use: Bearer <token>" });
     return false;
   }
