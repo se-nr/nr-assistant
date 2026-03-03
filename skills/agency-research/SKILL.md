@@ -5,8 +5,8 @@ description: |
   Output: udfyldt clients/[klient]/context/research-sources.md klar til brand strategi og copy.
   Trigger: "research klient", "kør research", "find VoC"
 argument-hint: "[klient-navn]"
-allowed-tools: Read, Write, Bash, WebSearch, WebFetch, AskUserQuestion
-version: 1.0.0
+allowed-tools: Read, Write, Bash, WebSearch, WebFetch, AskUserQuestion, Task
+version: 1.1.0
 author: Neble+Rohde <isidor@neble-rohde.dk>
 ---
 
@@ -16,6 +16,7 @@ Automatisk research-fase via NotebookLM (primær) eller web (fallback).
 
 <execution_context>
 @~/agency-context/agency/process.md
+@~/agency-context/agency/knowledge/research-methodology.md
 @~/agency-context/clients/_research-sources-template.md
 @~/.claude/skills/notebooklm/SKILL.md
 </execution_context>
@@ -124,7 +125,15 @@ Kombiner alle svar til syntese inden Trin 5.
 ## Trin 4b: Web Research (hvis ingen notebook, ELLER som supplement)
 
 Kør dette uanset om NotebookLM blev brugt — web research supplerer altid.
-Brug WebSearch til at finde sider, WebFetch til at hente indhold.
+
+**Agent-spawning (valgfrit):** Spawn `brand-market-research` agent via Task tool:
+```
+"Lav web research for [klient]. Brand: [navn], Kategori: [kategori], Website: [URL]
+Følg ~/agency-context/agency/agents/brand-market-research.md
+Levér: VoC (min 10 citater), konkurrenter (3-5), white space, sprogmønstre."
+```
+
+Alternativt kør manuelt med WebSearch/WebFetch:
 
 **4b.1 – Trustpilot VoC:**
 1. WebSearch: `[brand] site:trustpilot.com/review`

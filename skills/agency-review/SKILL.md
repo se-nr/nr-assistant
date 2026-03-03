@@ -5,22 +5,23 @@ description: |
   Brug til månedlige klient-reviews med rapport og næste måneds prioriteter.
   Trigger: "månedsstatus", "monthly review", "klient rapport"
 argument-hint: "[klient-navn] [måned]"
-allowed-tools: Read, Write, AskUserQuestion, Bash
-version: 1.0.0
+allowed-tools: Read, Write, AskUserQuestion, Bash, Task
+version: 1.1.0
 author: Neble+Rohde <isidor@neble-rohde.dk>
 ---
 
 # Agency Monthly Review
 
-Månedlig status-review workflow. Følger workflow fra agency-context.
+Månedlig status-review med cross-channel orchestrator og auto-arkivering.
 
-## Kontekst-filer
-
-Læs disse filer ved start:
-- `~/agency-context/agency/process.md` – grundregler
-- `~/agency-context/agency/benchmarks.md` – platform-benchmarks
-- `~/agency-context/agency/templates/monthly-report.md` – rapporttemplate
-- `~/agency-context/workflows/monthly-review.md` – fuld workflow
+<execution_context>
+@~/agency-context/agency/process.md
+@~/agency-context/agency/benchmarks.md
+@~/agency-context/agency/knowledge/meta-ads.md
+@~/agency-context/agency/knowledge/klaviyo.md
+@~/agency-context/agency/templates/monthly-report.md
+@~/agency-context/workflows/monthly-review.md
+</execution_context>
 
 ## Process
 
@@ -35,6 +36,18 @@ Hvis et klient-navn (og evt. måned) er angivet som argument:
 1. Hvis N+R Agency MCP er tilgængelig: brug `get_performance`, `get_top_ads` og `get_demographic_breakdown` automatisk
 2. Hvis brugeren indsætter data direkte: brug det
 3. Spørg brugeren om data-kilde hvis hverken MCP eller direkte data er tilgængeligt
+
+## Agent-spawning
+
+Spawn `analysis-orchestrator` agent via Task tool:
+```
+"Lav månedlig review for [klient], [måned].
+Kontekst: [indsæt overview.md + data + historik]
+Følg ~/agency-context/agency/agents/analysis-orchestrator.md
+Levér: Cross-channel summary, kanal-gennemgang, top kreative, anbefaling til næste måned."
+```
+
+Hvis klienten har Klaviyo: spawn `performance-analyst-klaviyo` parallelt for email-metrics.
 
 ## Attribution-regel (altid)
 
@@ -51,4 +64,11 @@ Hvis et klient-navn (og evt. måned) er angivet som argument:
 ## Output
 
 Gem rapport som `~/agency-context/clients/[klient]/monthly-[YYYY-MM]-report.md`
-Opdater `~/agency-context/clients/[klient]/history.md` med nøgle-læringsmomenter.
+
+## Archiver
+
+Når rapporten er gemt, spawn archiver agent:
+```
+"Arkivér månedlig review for [klient]. Output: [sti]. Skill: review.
+Følg ~/agency-context/agency/agents/archiver.md"
+```

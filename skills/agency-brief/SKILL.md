@@ -5,21 +5,21 @@ description: |
   Brug til at oprette kampagne-briefs for klienter.
   Trigger: "kampagne brief", "lav brief", "nyt brief"
 argument-hint: "[klient-navn]"
-allowed-tools: Read, Write, AskUserQuestion
-version: 1.0.0
+allowed-tools: Read, Write, AskUserQuestion, Task
+version: 1.1.0
 author: Neble+Rohde <isidor@neble-rohde.dk>
 ---
 
 # Agency Brief
 
-Guided kampagne-brief oprettelse. Følger workflow fra agency-context.
+Guided kampagne-brief oprettelse med copywriting knowledge.
 
-## Kontekst-filer
-
-Læs disse filer ved start:
-- `~/agency-context/agency/process.md` – grundregler
-- `~/agency-context/agency/templates/campaign-brief.md` – template
-- `~/agency-context/workflows/campaign-brief.md` – fuld workflow
+<execution_context>
+@~/agency-context/agency/process.md
+@~/agency-context/agency/knowledge/copywriting.md
+@~/agency-context/agency/templates/campaign-brief.md
+@~/agency-context/workflows/campaign-brief.md
+</execution_context>
 
 ## Process
 
@@ -27,10 +27,15 @@ Udfør campaign-brief workflow fra kontekst-filerne ovenfor.
 
 Hvis et klient-navn er angivet som argument:
 1. Load `~/agency-context/clients/[klient-navn]/overview.md` hvis den eksisterer
-2. Brug klient-konteksten til at informere brieffet
+2. Brug klient-konteksten til at informere briefet
 3. **Research-check**: Tjek om `~/agency-context/clients/[klient]/context/research-sources.md` eksisterer.
    Hvis den eksisterer: load den og brug research til at grunde briefet.
    Hvis den IKKE eksisterer: nævn det for brugeren – "Der er ikke lavet research for denne klient endnu. Overvej at køre /agency:research først for bedre funderet brief."
+
+Brug copywriting knowledge til at sikre:
+- Hooks matcher funnel-stadie (FP/IM/IP/EC)
+- Budskaber er forankret i VoC (hvis research eksisterer)
+- CTA'er er platform-passende
 
 ## Output
 

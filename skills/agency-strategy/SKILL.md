@@ -9,12 +9,22 @@ triggers:
   - lav en strategi
   - strategy for
   - strategiplan
+allowed-tools: Read, Write, Bash, WebSearch, WebFetch, AskUserQuestion, Task
+version: 1.1.0
+author: Neble+Rohde <isidor@neble-rohde.dk>
 ---
 
 # Agency Strategy — Brand & Marketingstrategi
 
-Bygger en komplet brand- og marketingstrategi i 5 faser med checkpoints mellem hver fase.
-Brugeren godkender hver fase before naeste starter.
+Bygger en komplet brand- og marketingstrategi i 5 faser med checkpoints, agent-spawning og auto-arkivering.
+
+<execution_context>
+@~/agency-context/agency/process.md
+@~/agency-context/agency/knowledge/copywriting.md
+@~/agency-context/agency/knowledge/meta-ads.md
+@~/agency-context/agency/knowledge/research-methodology.md
+@~/agency-context/agency/benchmarks.md
+</execution_context>
 
 **Output:** `~/agency-context/clients/[klient]/strategies/[dato]-[emne].md`
 
@@ -23,14 +33,37 @@ Brugeren godkender hver fase before naeste starter.
 ## Fase-oversigt
 
 ```
-┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
-│ 1.CONTEXT│───▶│2.RESEARCH│───▶│3.PLANNING│───▶│4.EXECUTE │───▶│ 5.REVIEW │
-│          │    │          │    │          │    │          │    │          │
-│ Spoergsmaal│  │ NotebookLM│   │ Strategi-│    │ Skriv det│    │ Godkend  │
-│ + brief  │    │ + Web     │    │ beslut-  │    │ faerdige │    │ + iterer │
-│          │    │           │    │ ninger   │    │ dokument │    │          │
-└──────────┘    └──────────┘    └──────────┘    └──────────┘    └──────────┘
-     checkpoint      checkpoint      checkpoint      checkpoint      DONE
+┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌─────────┐
+│ 1.CONTEXT│───▶│2.RESEARCH│───▶│3.PLANNING│───▶│4.EXECUTE │───▶│ 5.REVIEW │───▶│6.ARCHIVE│
+│          │    │          │    │          │    │          │    │          │    │         │
+│ Spoergsmaal│  │ NotebookLM│   │ Strategi-│    │ Skriv det│    │ Godkend  │    │ Auto-   │
+│ + brief  │    │ + Web     │    │ beslut-  │    │ faerdige │    │ + iterer │    │ arkivér │
+│          │    │           │    │ ninger   │    │ dokument │    │          │    │         │
+└──────────┘    └──────────┘    └──────────┘    └──────────┘    └──────────┘    └─────────┘
+     checkpoint      checkpoint      checkpoint      checkpoint      DONE         archiver
+```
+
+## Agent-spawning
+
+I Fase 2 (Research): spawn `brand-market-research` agent:
+```
+"Lav research for [klient] strategi.
+Følg ~/agency-context/agency/agents/brand-market-research.md"
+```
+
+I Fase 3 (Planning): spawn `brand-marketing-strategist` agent:
+```
+"Udvikl strategiske beslutninger for [klient].
+Kontekst: [context-brief + research-output]
+Følg ~/agency-context/agency/agents/brand-marketing-strategist.md"
+```
+
+## Archiver (Fase 6 — automatisk efter godkendelse)
+
+Spawn archiver agent:
+```
+"Arkivér strategi for [klient]. Output: [sti]. Skill: strategy.
+Følg ~/agency-context/agency/agents/archiver.md"
 ```
 
 ---

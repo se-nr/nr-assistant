@@ -5,21 +5,20 @@ description: |
   Brug når en ny klient skal tilføjes til agency-context databasen.
   Trigger: "onboard klient", "ny klient", "tilføj klient"
 argument-hint: "[klient-navn]"
-allowed-tools: Read, Write, Bash, AskUserQuestion
-version: 1.0.0
+allowed-tools: Read, Write, Bash, AskUserQuestion, Task
+version: 1.1.0
 author: Neble+Rohde <isidor@neble-rohde.dk>
 ---
 
 # Agency Onboard
 
-Guided onboarding af en ny klient. Følger workflow fra agency-context.
+Guided onboarding af en ny klient med auto-arkivering.
 
-## Kontekst-filer
-
-Læs disse filer ved start:
-- `~/agency-context/agency/process.md` – grundregler
-- `~/agency-context/clients/_template.md` – skabelon
-- `~/agency-context/workflows/onboarding.md` – fuld workflow
+<execution_context>
+@~/agency-context/agency/process.md
+@~/agency-context/clients/_template.md
+@~/agency-context/workflows/onboarding.md
+</execution_context>
 
 ## Process
 
@@ -41,3 +40,12 @@ cd ~/.claude/skills/notebooklm && python scripts/run.py notebook_manager.py add 
 ## Output
 
 Gem i `~/agency-context/clients/[klient-navn]/overview.md`
+
+## Archiver
+
+Når onboarding er færdig, spawn archiver agent via Task tool:
+```
+"Arkivér onboarding for [klient]. Output: [sti til overview.md]. Skill: onboard.
+Opret history.md med initial entry.
+Følg ~/agency-context/agency/agents/archiver.md"
+```
