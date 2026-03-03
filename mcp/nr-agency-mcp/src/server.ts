@@ -1035,7 +1035,7 @@ export function createMcpServer(): McpServer {
 
       const { data, error } = await sb
         .from("insights")
-        .select("spend, impressions, clicks, purchases, purchase_value, ctr, cpc, cpm, cpa, roas")
+        .select("spend, impressions, clicks, purchases, purchase_value, ctr, cpc, cpm, cpa, roas, search_impression_share, search_top_impression_share, search_budget_lost_imp_share, search_rank_lost_imp_share")
         .eq("client_id", client.id)
         .eq("source", "google_ads")
         .gte("date", since)
@@ -1044,14 +1044,24 @@ export function createMcpServer(): McpServer {
       if (error) return err(error.message);
       if (!data?.length) return text(`Ingen Google Ads data for ${client.name} i perioden ${since} → ${until}`);
 
+      let impShareSum = 0, topImpShareSum = 0, budgetLostSum = 0, rankLostSum = 0, impShareCount = 0;
       const agg = data.reduce(
-        (acc, r) => ({
-          spend: acc.spend + Number(r.spend || 0),
-          impressions: acc.impressions + Number(r.impressions || 0),
-          clicks: acc.clicks + Number(r.clicks || 0),
-          purchases: acc.purchases + Number(r.purchases || 0),
-          revenue: acc.revenue + Number(r.purchase_value || 0),
-        }),
+        (acc, r) => {
+          if (r.search_impression_share != null) {
+            impShareSum += Number(r.search_impression_share || 0);
+            topImpShareSum += Number(r.search_top_impression_share || 0);
+            budgetLostSum += Number(r.search_budget_lost_imp_share || 0);
+            rankLostSum += Number(r.search_rank_lost_imp_share || 0);
+            impShareCount++;
+          }
+          return {
+            spend: acc.spend + Number(r.spend || 0),
+            impressions: acc.impressions + Number(r.impressions || 0),
+            clicks: acc.clicks + Number(r.clicks || 0),
+            purchases: acc.purchases + Number(r.purchases || 0),
+            revenue: acc.revenue + Number(r.purchase_value || 0),
+          };
+        },
         { spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0 }
       );
 
@@ -1061,7 +1071,7 @@ export function createMcpServer(): McpServer {
       const cpm = agg.impressions > 0 ? (agg.spend / agg.impressions) * 1000 : 0;
       const cpa = agg.purchases > 0 ? agg.spend / agg.purchases : 0;
 
-      const report = [
+      const lines = [
         `## ${client.name} – Google Ads Performance (${time_range})`,
         `Periode: ${since} → ${until} | ${data.length} daglige rækker`,
         ``,
@@ -1077,9 +1087,26 @@ export function createMcpServer(): McpServer {
         `| CTR | ${ctr.toFixed(2)}% |`,
         `| CPC | ${Math.round(cpc)} kr |`,
         `| CPM | ${Math.round(cpm)} kr |`,
-      ].join("\n");
+      ];
 
-      return text(report);
+      if (impShareCount > 0) {
+        const avgIS = (impShareSum / impShareCount * 100).toFixed(1);
+        const avgTopIS = (topImpShareSum / impShareCount * 100).toFixed(1);
+        const avgBudgetLost = (budgetLostSum / impShareCount * 100).toFixed(1);
+        const avgRankLost = (rankLostSum / impShareCount * 100).toFixed(1);
+        lines.push(
+          ``,
+          `**Search Impression Share (gns.)**`,
+          `| Metric | Værdi |`,
+          `|--------|-------|`,
+          `| Impression Share | ${avgIS}% |`,
+          `| Top Impression Share | ${avgTopIS}% |`,
+          `| Tabt pga. budget | ${avgBudgetLost}% |`,
+          `| Tabt pga. ranking | ${avgRankLost}% |`,
+        );
+      }
+
+      return text(lines.join("\n"));
     }
   );
 
@@ -1137,19 +1164,34 @@ export function createMcpServer(): McpServer {
         campMetrics.set(row.campaign_id, existing);
       }
 
+      // Filter: only show campaigns with spend (or active)
+      const withSpend = campaigns.filter((c: any) => {
+        const m = campMetrics.get(c.id);
+        return m && m.spend > 0;
+      });
+      const withoutSpend = campaigns.filter((c: any) => {
+        const m = campMetrics.get(c.id);
+        return !m || m.spend === 0;
+      });
+
       const lines = [
         `## ${client.name} – Google Ads Kampagner (${time_range})`,
+        `${campaigns.length} kampagner totalt, ${withSpend.length} med spend i perioden`,
         ``,
-        `| Kampagne | Status | Spend | ROAS | Conv. | CPA | CTR |`,
-        `|----------|--------|-------|------|-------|-----|-----|`,
-        ...campaigns.map((c: any) => {
+        `| Kampagne | Status | Type | Spend | ROAS | Conv. | CPA | CTR |`,
+        `|----------|--------|------|-------|------|-------|-----|-----|`,
+        ...withSpend.map((c: any) => {
           const m = campMetrics.get(c.id) || { spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0 };
           const roas = m.spend > 0 ? (m.revenue / m.spend).toFixed(2) : "–";
           const cpa = m.purchases > 0 ? Math.round(m.spend / m.purchases) + " kr" : "–";
           const ctr = m.impressions > 0 ? ((m.clicks / m.impressions) * 100).toFixed(2) + "%" : "–";
-          return `| \`${c.name}\` | ${c.status} | ${formatCurrency(m.spend)} | ${roas}x | ${Math.round(m.purchases)} | ${cpa} | ${ctr} |`;
+          return `| \`${c.name}\` | ${googleEnum(GOOGLE_CAMPAIGN_STATUS, c.status)} | ${googleEnum(GOOGLE_CAMPAIGN_TYPE, c.objective)} | ${formatCurrency(m.spend)} | ${roas}x | ${Math.round(m.purchases)} | ${cpa} | ${ctr} |`;
         }),
       ];
+
+      if (withoutSpend.length > 0) {
+        lines.push(``, `*${withoutSpend.length} kampagner uden spend i perioden (${withoutSpend.filter((c: any) => String(c.status) === "2").length} ENABLED)*`);
+      }
 
       return text(lines.join("\n"));
     }
@@ -1448,6 +1490,201 @@ export function createMcpServer(): McpServer {
     }
   );
 
+  // ─── Tool: get_google_keywords ────────────────────────────────────────────
+
+  server.tool(
+    "get_google_keywords",
+    "Hent Google Ads keyword-performance med Quality Score, predicted CTR, ad relevance og landing page experience. Sortér efter spend, QS eller conversions.",
+    {
+      client_name: z.string().describe("Klientens navn"),
+      time_range: z.string().default("last_30d").describe(TIME_RANGE_DESC),
+      sort_by: z.enum(["spend", "conversions", "quality_score", "clicks"]).default("spend").describe("Sorteringskolonne"),
+      limit: z.number().default(30).describe("Max antal keywords at vise"),
+      min_spend: z.number().default(0).describe("Minimum spend for at inkludere keyword"),
+      match_type: z.enum(["all", "BROAD", "PHRASE", "EXACT"]).default("all").describe("Filtrer på match type"),
+    },
+    async ({ client_name, time_range, sort_by, limit, min_spend, match_type }) => {
+      const sb = getSupabase();
+      const client = await findClient(sb, client_name);
+      if (!client) return noClient(client_name);
+
+      const { since, until } = resolveDateRange(time_range);
+
+      let query = sb
+        .from("google_keywords")
+        .select("keyword_text, match_type, date, spend, clicks, impressions, conversions, quality_score, search_predicted_ctr, ad_relevance, landing_page_experience")
+        .eq("client_id", client.id)
+        .gte("date", since)
+        .lte("date", until);
+
+      if (match_type !== "all") query = query.eq("match_type", match_type);
+
+      const { data, error } = await query;
+      if (error) return err(error.message);
+      if (!data?.length) return text(`Ingen keyword-data for ${client.name} i perioden ${since} → ${until}`);
+
+      // Aggregate per keyword+match_type (latest QS wins)
+      const kwMap = new Map<string, {
+        keyword: string; matchType: string;
+        spend: number; clicks: number; impressions: number; conversions: number;
+        qualityScore: number | null; predictedCtr: string; adRelevance: string; landingPage: string;
+      }>();
+
+      for (const r of data) {
+        const key = `${r.keyword_text}|${r.match_type}`;
+        const existing = kwMap.get(key);
+        if (existing) {
+          existing.spend += Number(r.spend || 0);
+          existing.clicks += Number(r.clicks || 0);
+          existing.impressions += Number(r.impressions || 0);
+          existing.conversions += Number(r.conversions || 0);
+          // Keep latest QS (non-null)
+          if (r.quality_score != null) existing.qualityScore = Number(r.quality_score);
+          if (r.search_predicted_ctr) existing.predictedCtr = r.search_predicted_ctr;
+          if (r.ad_relevance) existing.adRelevance = r.ad_relevance;
+          if (r.landing_page_experience) existing.landingPage = r.landing_page_experience;
+        } else {
+          kwMap.set(key, {
+            keyword: r.keyword_text,
+            matchType: r.match_type,
+            spend: Number(r.spend || 0),
+            clicks: Number(r.clicks || 0),
+            impressions: Number(r.impressions || 0),
+            conversions: Number(r.conversions || 0),
+            qualityScore: r.quality_score != null ? Number(r.quality_score) : null,
+            predictedCtr: r.search_predicted_ctr || "–",
+            adRelevance: r.ad_relevance || "–",
+            landingPage: r.landing_page_experience || "–",
+          });
+        }
+      }
+
+      let keywords = [...kwMap.values()].filter(k => k.spend >= min_spend);
+
+      // Sort
+      switch (sort_by) {
+        case "spend": keywords.sort((a, b) => b.spend - a.spend); break;
+        case "conversions": keywords.sort((a, b) => b.conversions - a.conversions); break;
+        case "quality_score": keywords.sort((a, b) => (b.qualityScore || 0) - (a.qualityScore || 0)); break;
+        case "clicks": keywords.sort((a, b) => b.clicks - a.clicks); break;
+      }
+
+      keywords = keywords.slice(0, limit);
+
+      const totalSpend = keywords.reduce((s, k) => s + k.spend, 0);
+      const totalConv = keywords.reduce((s, k) => s + k.conversions, 0);
+
+      const lines = [
+        `## ${client.name} – Google Keywords (${time_range})`,
+        `${kwMap.size} unikke keywords | Viser top ${keywords.length} (sorteret: ${sort_by})`,
+        ``,
+        `| Keyword | Match | Spend | Conv. | CPA | QS | CTR pred. | Ad rel. | LP |`,
+        `|---------|-------|-------|-------|-----|----|-----------|---------|----|`,
+        ...keywords.map(k => {
+          const cpa = k.conversions > 0 ? Math.round(k.spend / k.conversions) + " kr" : "–";
+          const qs = k.qualityScore != null ? String(k.qualityScore) : "–";
+          return `| \`${k.keyword}\` | ${googleEnum(GOOGLE_MATCH_TYPE, k.matchType)} | ${formatCurrency(k.spend)} | ${k.conversions.toFixed(1)} | ${cpa} | ${qs} | ${googleEnum(GOOGLE_QS_RATING, k.predictedCtr)} | ${googleEnum(GOOGLE_QS_RATING, k.adRelevance)} | ${googleEnum(GOOGLE_QS_RATING, k.landingPage)} |`;
+        }),
+        ``,
+        `**Total:** ${formatCurrency(totalSpend)} spend, ${totalConv.toFixed(1)} conversions`,
+      ];
+
+      return text(lines.join("\n"));
+    }
+  );
+
+  // ─── Tool: get_google_search_terms ─────────────────────────────────────────
+
+  server.tool(
+    "get_google_search_terms",
+    "Hent Google Ads søgeforespørgsler (search terms) der udløste annoncer. Vis spend, klik og conversions per søgeterm. Filtrer på status (ADDED/EXCLUDED/NONE).",
+    {
+      client_name: z.string().describe("Klientens navn"),
+      time_range: z.string().default("last_30d").describe(TIME_RANGE_DESC),
+      sort_by: z.enum(["spend", "conversions", "clicks"]).default("spend").describe("Sorteringskolonne"),
+      limit: z.number().default(50).describe("Max antal søgetermer at vise"),
+      status: z.enum(["all", "ADDED", "EXCLUDED", "NONE"]).default("all").describe("Filtrer på term-status"),
+      min_clicks: z.number().default(0).describe("Minimum klik for at inkludere"),
+    },
+    async ({ client_name, time_range, sort_by, limit, status, min_clicks }) => {
+      const sb = getSupabase();
+      const client = await findClient(sb, client_name);
+      if (!client) return noClient(client_name);
+
+      const { since, until } = resolveDateRange(time_range);
+
+      let query = sb
+        .from("google_search_terms")
+        .select("search_term, status, date, spend, clicks, impressions, conversions")
+        .eq("client_id", client.id)
+        .gte("date", since)
+        .lte("date", until);
+
+      if (status !== "all") query = query.eq("status", status);
+
+      const { data, error } = await query;
+      if (error) return err(error.message);
+      if (!data?.length) return text(`Ingen search term data for ${client.name} i perioden ${since} → ${until}`);
+
+      // Aggregate per search_term
+      const termMap = new Map<string, {
+        term: string; status: string;
+        spend: number; clicks: number; impressions: number; conversions: number;
+      }>();
+
+      for (const r of data) {
+        const key = r.search_term;
+        const existing = termMap.get(key);
+        if (existing) {
+          existing.spend += Number(r.spend || 0);
+          existing.clicks += Number(r.clicks || 0);
+          existing.impressions += Number(r.impressions || 0);
+          existing.conversions += Number(r.conversions || 0);
+        } else {
+          termMap.set(key, {
+            term: r.search_term,
+            status: r.status || "NONE",
+            spend: Number(r.spend || 0),
+            clicks: Number(r.clicks || 0),
+            impressions: Number(r.impressions || 0),
+            conversions: Number(r.conversions || 0),
+          });
+        }
+      }
+
+      let terms = [...termMap.values()].filter(t => t.clicks >= min_clicks);
+
+      switch (sort_by) {
+        case "spend": terms.sort((a, b) => b.spend - a.spend); break;
+        case "conversions": terms.sort((a, b) => b.conversions - a.conversions); break;
+        case "clicks": terms.sort((a, b) => b.clicks - a.clicks); break;
+      }
+
+      terms = terms.slice(0, limit);
+
+      const totalSpend = terms.reduce((s, t) => s + t.spend, 0);
+      const totalConv = terms.reduce((s, t) => s + t.conversions, 0);
+      const totalClicks = terms.reduce((s, t) => s + t.clicks, 0);
+
+      const lines = [
+        `## ${client.name} – Google Search Terms (${time_range})`,
+        `${termMap.size} unikke søgetermer | Viser top ${terms.length} (sorteret: ${sort_by})`,
+        ``,
+        `| Søgeterm | Status | Spend | Klik | Conv. | CPA | CTR |`,
+        `|----------|--------|-------|------|-------|-----|-----|`,
+        ...terms.map(t => {
+          const cpa = t.conversions > 0 ? Math.round(t.spend / t.conversions) + " kr" : "–";
+          const ctr = t.impressions > 0 ? ((t.clicks / t.impressions) * 100).toFixed(2) + "%" : "–";
+          return `| \`${t.term}\` | ${googleEnum(GOOGLE_SEARCH_TERM_STATUS, t.status)} | ${formatCurrency(t.spend)} | ${t.clicks} | ${t.conversions.toFixed(1)} | ${cpa} | ${ctr} |`;
+        }),
+        ``,
+        `**Total:** ${formatCurrency(totalSpend)} spend, ${totalClicks} klik, ${totalConv.toFixed(1)} conversions`,
+      ];
+
+      return text(lines.join("\n"));
+    }
+  );
+
   return server;
 }
 
@@ -1522,6 +1759,18 @@ function resolveDateRange(range: string): { since: string; until: string } {
   const d = new Date(now);
   d.setDate(now.getDate() - 30);
   return { since: d.toISOString().split("T")[0], until: today };
+}
+
+// Google Ads API enum lookups (numeric → label)
+const GOOGLE_CAMPAIGN_STATUS: Record<string, string> = { "0": "UNSPECIFIED", "1": "UNKNOWN", "2": "ENABLED", "3": "PAUSED", "4": "REMOVED" };
+const GOOGLE_MATCH_TYPE: Record<string, string> = { "0": "UNSPECIFIED", "2": "EXACT", "3": "PHRASE", "4": "BROAD", "6": "BROAD" };
+const GOOGLE_CAMPAIGN_TYPE: Record<string, string> = { "2": "SEARCH", "3": "DISPLAY", "4": "SHOPPING", "6": "VIDEO", "8": "SMART", "9": "LOCAL", "10": "PMAX", "11": "LOCAL_SERVICES", "12": "DISCOVERY", "13": "APP", "14": "DEMAND_GEN" };
+const GOOGLE_SEARCH_TERM_STATUS: Record<string, string> = { "0": "UNSPECIFIED", "2": "ADDED", "3": "EXCLUDED", "4": "ADDED_EXCLUDED", "5": "NONE" };
+const GOOGLE_QS_RATING: Record<string, string> = { "2": "BELOW_AVERAGE", "3": "AVERAGE", "4": "ABOVE_AVERAGE" };
+
+function googleEnum(map: Record<string, string>, val: any): string {
+  const s = String(val ?? "");
+  return map[s] || s;
 }
 
 function formatCurrency(v: number): string {
