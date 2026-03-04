@@ -109,7 +109,7 @@ export function createMcpServer(): McpServer {
         });
 
         const s = data.summary;
-        if (!s) return text(`Ingen data for ${client.name} i perioden ${since} → ${until}`);
+        if (!s) return noData(client.name);
 
         const channelLines = (data.channelBreakdown || []).map((ch: any) =>
           `| ${ch.channel} | ${formatCurrency(ch.spend)} | ${ch.roas?.toFixed(2) || "–"}x | ${ch.purchases || 0} |`
@@ -176,7 +176,7 @@ export function createMcpServer(): McpServer {
         });
 
         const ads = data.ads || [];
-        if (!ads.length) return text(`Ingen annoncer med data for ${client.name} i perioden`);
+        if (!ads.length) return noData(client.name, "annonce");
 
         const lines = [
           `## ${client.name} – Top ${limit} annoncer (${time_range}, sorteret efter ${sort_by})`,
@@ -350,7 +350,7 @@ export function createMcpServer(): McpServer {
         });
 
         const rows = data.data || [];
-        if (!rows.length) return text(`Ingen ${breakdown}-data for ${client.name} i perioden`);
+        if (!rows.length) return noData(client.name, breakdown);
 
         const totalSpend = rows.reduce((s, r) => s + r.spend, 0);
         const label: Record<string, string> = { age: "Alder", gender: "Køn", platform: "Platform", placement: "Placement", device: "Device" };
@@ -688,7 +688,7 @@ export function createMcpServer(): McpServer {
         const a = dataA.summary;
         const b = dataB.summary;
 
-        if (!a && !b) return text(`Ingen data for ${client.name} i nogen af perioderne`);
+        if (!a && !b) return noData(client.name);
 
         function val(s: any, key: string): number { return s ? (Number(s[key]) || 0) : 0; }
         function delta(va: number, vb: number): string {
@@ -746,7 +746,7 @@ export function createMcpServer(): McpServer {
         });
 
         const rows = data.data || [];
-        if (!rows.length) return text(`Ingen land-data for ${client.name} i perioden`);
+        if (!rows.length) return noData(client.name, "land");
 
         const totalSpend = rows.reduce((s, r) => s + r.spend, 0);
 
@@ -789,7 +789,7 @@ export function createMcpServer(): McpServer {
         const data = await dashboardFetch<LeadCohortsResponse>("/api/lead-cohorts", params);
 
         const cohorts = data.cohorts || [];
-        if (!cohorts.length) return text(`Ingen lead cohort data for ${client.name}`);
+        if (!cohorts.length) return noData(client.name, "lead cohort");
 
         // Filter by ad_set_name if provided (client-side filter)
         const filteredCohorts = ad_set_name
@@ -958,7 +958,7 @@ export function createMcpServer(): McpServer {
 
       if (error) return err(error.message);
 
-      if (!data?.length) return text(`Ingen timedata for ${client.name} d. ${targetDate}`);
+      if (!data?.length) return noData(client.name, "time");
 
       const totalSpend = data.reduce((s: number, r: any) => s + (r.spend || 0), 0);
       const totalRevenue = data.reduce((s: number, r: any) => s + (r.revenue || 0), 0);
@@ -1054,7 +1054,7 @@ export function createMcpServer(): McpServer {
         .lte("date", until);
 
       if (error) return err(error.message);
-      if (!data?.length) return text(`Ingen Google Ads data for ${client.name} i perioden ${since} → ${until}`);
+      if (!data?.length) return noData(client.name, "Google Ads");
 
       let impShareSum = 0, topImpShareSum = 0, budgetLostSum = 0, rankLostSum = 0, impShareCount = 0;
       const agg = data.reduce(
@@ -1313,7 +1313,7 @@ export function createMcpServer(): McpServer {
       }
 
       if (!hasMeta && !hasGoogle && !hasShopify) {
-        return text(`Ingen kanal-data for ${client.name} i perioden ${since} → ${until}`);
+        return noData(client.name, "kanal");
       }
 
       return text(lines.join("\n"));
@@ -1346,7 +1346,7 @@ export function createMcpServer(): McpServer {
         .order("date", { ascending: false });
 
       if (error) return err(error.message);
-      if (!data?.length) return text(`Ingen Shopify data for ${client.name} i perioden ${since} → ${until}`);
+      if (!data?.length) return noData(client.name, "Shopify");
 
       if (by_country) {
         // Aggregate per country
@@ -1533,7 +1533,7 @@ export function createMcpServer(): McpServer {
 
       const { data, error } = await query;
       if (error) return err(error.message);
-      if (!data?.length) return text(`Ingen keyword-data for ${client.name} i perioden ${since} → ${until}`);
+      if (!data?.length) return noData(client.name, "keyword");
 
       // Aggregate per keyword+match_type (latest QS wins)
       const kwMap = new Map<string, {
@@ -1636,7 +1636,7 @@ export function createMcpServer(): McpServer {
 
       const { data, error } = await query;
       if (error) return err(error.message);
-      if (!data?.length) return text(`Ingen search term data for ${client.name} i perioden ${since} → ${until}`);
+      if (!data?.length) return noData(client.name, "search term");
 
       // Aggregate per search_term
       const termMap = new Map<string, {
@@ -2181,7 +2181,7 @@ export function createMcpServer(): McpServer {
 
         const { data, error: qErr } = await query;
         if (qErr) return err(qErr.message);
-        if (!data?.length) return text(`Ingen insights for ${client.name} i perioden ${since} – ${until}`);
+        if (!data?.length) return noData(client.name, "insights");
 
         // Aggregate by level
         type Agg = { spend: number; impressions: number; clicks: number; purchases: number; revenue: number; reach: number; link_clicks: number; video_views: number; rows: number };
@@ -2295,7 +2295,7 @@ export function createMcpServer(): McpServer {
 
         const { data, error: qErr } = await query;
         if (qErr) return err(qErr.message);
-        if (!data?.length) return text(`Ingen data for ${client.name} i perioden.`);
+        if (!data?.length) return noData(client.name);
 
         // Aggregate per day
         const days = new Map<string, { spend: number; impressions: number; clicks: number; purchases: number; revenue: number }>();
@@ -2364,7 +2364,7 @@ export function createMcpServer(): McpServer {
           .neq("gender", "all");
 
         if (qErr) return err(qErr.message);
-        if (!data?.length) return text(`Ingen demografisk data for ${client.name} i perioden.`);
+        if (!data?.length) return noData(client.name, "demografisk");
 
         type Agg = { spend: number; impressions: number; clicks: number; purchases: number; revenue: number };
         const groups = new Map<string, Agg>();
@@ -2432,7 +2432,7 @@ export function createMcpServer(): McpServer {
           .lte("date", until);
 
         if (qErr) return err(qErr.message);
-        if (!data?.length) return text(`Ingen placement-data for ${client.name} i perioden.`);
+        if (!data?.length) return noData(client.name, "placement");
 
         type Agg = { spend: number; impressions: number; clicks: number };
         const groups = new Map<string, Agg>();
@@ -3069,6 +3069,15 @@ function err(msg: string) {
 
 function text(t: string) {
   return { content: [{ type: "text" as const, text: t }] };
+}
+
+/** Return a "no data" response with a backfill suggestion */
+function noData(clientName: string, dataType?: string) {
+  const what = dataType ? `${dataType} ` : "";
+  return text(
+    `Ingen ${what}data for ${clientName} i perioden.\n\n` +
+    `Vil du have, at jeg henter historisk data ind? Første gang henter jeg for 2 år — en backfill tager typisk 30–45 minutter, og jeg giver dig besked når det er klar.`
+  );
 }
 
 /**
