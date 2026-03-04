@@ -2182,6 +2182,98 @@ ${script}
     }
   );
 
+  // ─── Tool: update_assistant ───────────────────────────────────────────────
+  // Pulls latest changes from GitHub and re-installs skills.
+
+  server.tool(
+    "update_assistant",
+    "Opdater NR Assistant til nyeste version (git pull + skill-kopi). Kør dette jævnligt for at få nye skills og forbedringer.",
+    {},
+    async () => {
+      const script = `#!/bin/bash
+set -e
+
+NR_DIR="$HOME/.claude/nr-assistant"
+SKILLS_DIR="$HOME/.claude/skills"
+
+GREEN='\\033[0;32m'
+YELLOW='\\033[1;33m'
+BLUE='\\033[0;34m'
+NC='\\033[0m'
+
+ok()   { echo -e "  \${GREEN}✓\${NC} $1"; }
+warn() { echo -e "  \${YELLOW}⚠\${NC}  $1"; }
+info() { echo -e "  \${BLUE}→\${NC} $1"; }
+
+echo ""
+echo "╔══════════════════════════════════════╗"
+echo "║    NR Assistant – Update             ║"
+echo "╚══════════════════════════════════════╝"
+echo ""
+
+if [ ! -d "$NR_DIR/.git" ]; then
+  echo "NR Assistant ikke installeret. Kør setup_assistant først."
+  exit 1
+fi
+
+OLD_VERSION=$(cat "$NR_DIR/VERSION" 2>/dev/null || echo "unknown")
+info "Nuværende version: $OLD_VERSION"
+
+# Pull latest
+cd "$NR_DIR"
+git fetch origin main
+LOCAL=$(git rev-parse HEAD)
+REMOTE=$(git rev-parse origin/main)
+
+if [ "$LOCAL" = "$REMOTE" ]; then
+  ok "Allerede på nyeste version ($OLD_VERSION)"
+  exit 0
+fi
+
+git pull --ff-only origin main
+NEW_VERSION=$(cat "$NR_DIR/VERSION" 2>/dev/null || echo "unknown")
+
+# Re-install skills
+info "Opdaterer skills..."
+mkdir -p "$SKILLS_DIR"
+UPDATED=0
+for skill_dir in "$NR_DIR/skills"/*/; do
+  skill_name=$(basename "$skill_dir")
+  if [ -f "$skill_dir/SKILL.md" ]; then
+    mkdir -p "$SKILLS_DIR/$skill_name"
+    cp "$skill_dir/SKILL.md" "$SKILLS_DIR/$skill_name/SKILL.md"
+    ok "$skill_name"
+    UPDATED=$((UPDATED + 1))
+  fi
+done
+
+echo ""
+echo "══════════════════════════════════════════"
+echo -e "\${GREEN}  Opdateret: $OLD_VERSION → $NEW_VERSION\${NC}"
+echo -e "  \${BLUE}$UPDATED skills opdateret\${NC}"
+echo "══════════════════════════════════════════"
+echo ""
+`;
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `## NR Assistant Update
+
+Kør dette script for at opdatere NR Assistant til nyeste version:
+
+\`\`\`bash
+${script}
+\`\`\`
+
+**Instruktion til Claude Code:** Kør ovenstående bash-script for at opdatere NR Assistant. Scriptet gitter pull fra GitHub og kopierer opdaterede skills til ~/.claude/skills/.`,
+          },
+        ],
+      };
+    }
+  );
+
   return server;
 }
 

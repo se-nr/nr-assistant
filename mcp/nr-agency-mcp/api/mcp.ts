@@ -86,6 +86,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         "get_klaviyo_metrics",
         "get_klaviyo_health",
         "setup_assistant",
+        "update_assistant",
       ],
     });
     return;
