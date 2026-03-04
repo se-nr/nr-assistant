@@ -2061,6 +2061,559 @@ export function createMcpServer(): McpServer {
     }
   );
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ADVANCED ANALYTICS TOOLS (replaces Pipedream read-only tools)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // ─── Tool: get_ad_insights ────────────────────────────────────────────────
+  // Flexible insight queries — any level, any source, any metric.
+
+  server.tool(
+    "get_ad_insights",
+    "Fleksibel insights-query: vælg level (ad/adset/campaign/account), source (meta/google_ads/all), og metrics. Aggregerer over tidsperiode. Erstatter Pipedreams get_insights.",
+    {
+      client_name: z.string().describe("Klientnavn (fuzzy match)"),
+      time_range: z.string().default("last_30d").describe(TIME_RANGE_DESC),
+      level: z.enum(["ad", "adset", "campaign", "account"]).default("campaign").describe("Aggregeringsniveau"),
+      source: z.enum(["meta", "google_ads", "all"]).default("all").describe("Datakilde"),
+      campaign_id: z.string().optional().describe("Filtrer til specifik campaign (intern ID)"),
+      adset_id: z.string().optional().describe("Filtrer til specifik ad set (intern ID)"),
+      limit: z.number().default(50).describe("Max antal rækker"),
+      sort_by: z.enum(["spend", "purchases", "roas", "impressions", "clicks"]).default("spend").describe("Sortering"),
+    },
+    async ({ client_name, time_range, level, source, campaign_id, adset_id, limit, sort_by }) => {
+      try {
+        const sb = getSupabase();
+        const client = await findClient(sb, client_name);
+        if (!client) return noClient(client_name);
+        const { since, until } = resolveDateRange(time_range);
+
+        let query = sb
+          .from("insights")
+          .select("campaign_id, ad_set_id, ad_id, date, spend, impressions, clicks, purchases, purchase_value, ctr, cpc, cpm, cpa, roas, reach, link_clicks, video_views")
+          .eq("client_id", client.id)
+          .gte("date", since)
+          .lte("date", until);
+
+        if (source !== "all") query = query.eq("source", source);
+        if (campaign_id) query = query.eq("campaign_id", campaign_id);
+        if (adset_id) query = query.eq("ad_set_id", adset_id);
+
+        const { data, error: qErr } = await query;
+        if (qErr) return err(qErr.message);
+        if (!data?.length) return text(`Ingen insights for ${client.name} i perioden ${since} – ${until}`);
+
+        // Aggregate by level
+        type Agg = { spend: number; impressions: number; clicks: number; purchases: number; revenue: number; reach: number; link_clicks: number; video_views: number; rows: number };
+        const groups = new Map<string, Agg & { label: string }>();
+
+        for (const r of data) {
+          let key: string;
+          if (level === "account") key = "account";
+          else if (level === "campaign") key = r.campaign_id || "unknown";
+          else if (level === "adset") key = r.ad_set_id || r.campaign_id || "unknown";
+          else key = r.ad_id || r.ad_set_id || "unknown";
+
+          if (!groups.has(key)) groups.set(key, { label: key, spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0, reach: 0, link_clicks: 0, video_views: 0, rows: 0 });
+          const g = groups.get(key)!;
+          g.spend += r.spend || 0;
+          g.impressions += r.impressions || 0;
+          g.clicks += r.clicks || 0;
+          g.purchases += r.purchases || 0;
+          g.revenue += r.purchase_value || 0;
+          g.reach += r.reach || 0;
+          g.link_clicks += r.link_clicks || 0;
+          g.video_views += r.video_views || 0;
+          g.rows++;
+        }
+
+        // Fetch names for campaign/adset/ad IDs
+        const ids = [...groups.keys()].filter(k => k !== "account" && k !== "unknown");
+        let nameMap = new Map<string, string>();
+
+        if (level === "campaign" && ids.length) {
+          const { data: camps } = await sb.from("campaigns").select("id, name").in("id", ids);
+          camps?.forEach(c => nameMap.set(c.id, c.name));
+        } else if (level === "adset" && ids.length) {
+          const { data: sets } = await sb.from("ad_sets").select("id, name").in("id", ids);
+          sets?.forEach(s => nameMap.set(s.id, s.name));
+        } else if (level === "ad" && ids.length) {
+          const { data: ads } = await sb.from("ads").select("id, name").in("id", ids.slice(0, 100));
+          ads?.forEach(a => nameMap.set(a.id, a.name));
+        }
+
+        // Sort
+        const sorted = [...groups.values()].sort((a, b) => {
+          if (sort_by === "roas") return (b.revenue / (b.spend || 1)) - (a.revenue / (a.spend || 1));
+          return (b as any)[sort_by] - (a as any)[sort_by];
+        }).slice(0, limit);
+
+        const lines: string[] = [`## ${client.name} – Insights (${level}) | ${since} → ${until}\n`];
+
+        if (level === "account") {
+          const a = sorted[0];
+          const roas = a.spend > 0 ? (a.revenue / a.spend).toFixed(2) : "–";
+          lines.push(
+            `| Metric | Værdi |`,
+            `|--------|-------|`,
+            `| Spend | ${formatCurrency(a.spend)} |`,
+            `| Impressions | ${formatNum(a.impressions)} |`,
+            `| Clicks | ${formatNum(a.clicks)} |`,
+            `| Purchases | ${formatNum(a.purchases)} |`,
+            `| Revenue | ${formatCurrency(a.revenue)} |`,
+            `| ROAS | ${roas}x |`,
+            `| CTR | ${a.impressions > 0 ? ((a.clicks / a.impressions) * 100).toFixed(2) : "–"}% |`,
+            `| CPA | ${a.purchases > 0 ? formatCurrency(a.spend / a.purchases) : "–"} |`,
+          );
+        } else {
+          lines.push(`| Navn | Spend | Impr. | Clicks | Køb | Revenue | ROAS |`);
+          lines.push(`|------|-------|-------|--------|-----|---------|------|`);
+          for (const g of sorted) {
+            const name = nameMap.get(g.label) || g.label;
+            const roas = g.spend > 0 ? (g.revenue / g.spend).toFixed(2) + "x" : "–";
+            const shortName = name.length > 40 ? name.slice(0, 37) + "…" : name;
+            lines.push(`| ${shortName} | ${formatCurrency(g.spend)} | ${formatNum(g.impressions)} | ${formatNum(g.clicks)} | ${formatNum(g.purchases)} | ${formatCurrency(g.revenue)} | ${roas} |`);
+          }
+        }
+
+        lines.push(`\n**Kilde:** ${source === "all" ? "Meta + Google" : source} | **Rækker:** ${data.length} | **Grupper:** ${groups.size}`);
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(e.message);
+      }
+    }
+  );
+
+  // ─── Tool: get_daily_trend ────────────────────────────────────────────────
+  // Day-by-day performance for trend analysis.
+
+  server.tool(
+    "get_daily_trend",
+    "Daglig trend: spend, impressions, clicks, purchases, revenue per dag. Perfekt til at spotte trends og anomalier.",
+    {
+      client_name: z.string().describe("Klientnavn (fuzzy match)"),
+      time_range: z.string().default("last_30d").describe(TIME_RANGE_DESC),
+      source: z.enum(["meta", "google_ads", "all"]).default("all").describe("Datakilde"),
+      campaign_id: z.string().optional().describe("Filtrer til specifik campaign"),
+    },
+    async ({ client_name, time_range, source, campaign_id }) => {
+      try {
+        const sb = getSupabase();
+        const client = await findClient(sb, client_name);
+        if (!client) return noClient(client_name);
+        const { since, until } = resolveDateRange(time_range);
+
+        let query = sb
+          .from("insights")
+          .select("date, spend, impressions, clicks, purchases, purchase_value")
+          .eq("client_id", client.id)
+          .gte("date", since)
+          .lte("date", until);
+
+        if (source !== "all") query = query.eq("source", source);
+        if (campaign_id) query = query.eq("campaign_id", campaign_id);
+
+        const { data, error: qErr } = await query;
+        if (qErr) return err(qErr.message);
+        if (!data?.length) return text(`Ingen data for ${client.name} i perioden.`);
+
+        // Aggregate per day
+        const days = new Map<string, { spend: number; impressions: number; clicks: number; purchases: number; revenue: number }>();
+        for (const r of data) {
+          const d = r.date;
+          if (!days.has(d)) days.set(d, { spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0 });
+          const g = days.get(d)!;
+          g.spend += r.spend || 0;
+          g.impressions += r.impressions || 0;
+          g.clicks += r.clicks || 0;
+          g.purchases += r.purchases || 0;
+          g.revenue += r.purchase_value || 0;
+        }
+
+        const sorted = [...days.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+        const totals = { spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0 };
+        sorted.forEach(([, d]) => { totals.spend += d.spend; totals.impressions += d.impressions; totals.clicks += d.clicks; totals.purchases += d.purchases; totals.revenue += d.revenue; });
+
+        const lines: string[] = [
+          `## ${client.name} – Daglig trend | ${since} → ${until}\n`,
+          `| Dato | Spend | Impr. | Clicks | Køb | Revenue | ROAS |`,
+          `|------|-------|-------|--------|-----|---------|------|`,
+        ];
+
+        for (const [date, d] of sorted) {
+          const roas = d.spend > 0 ? (d.revenue / d.spend).toFixed(2) + "x" : "–";
+          lines.push(`| ${date} | ${formatCurrency(d.spend)} | ${formatNum(d.impressions)} | ${formatNum(d.clicks)} | ${formatNum(d.purchases)} | ${formatCurrency(d.revenue)} | ${roas} |`);
+        }
+
+        const avgRoas = totals.spend > 0 ? (totals.revenue / totals.spend).toFixed(2) : "–";
+        lines.push(`| **Total** | **${formatCurrency(totals.spend)}** | **${formatNum(totals.impressions)}** | **${formatNum(totals.clicks)}** | **${formatNum(totals.purchases)}** | **${formatCurrency(totals.revenue)}** | **${avgRoas}x** |`);
+        lines.push(`\n**Dage:** ${sorted.length} | **Gns. dagligt spend:** ${formatCurrency(totals.spend / (sorted.length || 1))}`);
+
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(e.message);
+      }
+    }
+  );
+
+  // ─── Tool: get_age_gender_breakdown ───────────────────────────────────────
+  // Demographic breakdown from synced data.
+
+  server.tool(
+    "get_age_gender_breakdown",
+    "Alder/køn-breakdown: spend, impressions, clicks, purchases, revenue fordelt på aldersgrupper og køn.",
+    {
+      client_name: z.string().describe("Klientnavn (fuzzy match)"),
+      time_range: z.string().default("last_30d").describe(TIME_RANGE_DESC),
+      group_by: z.enum(["age", "gender", "age_gender"]).default("age").describe("Grupperingsdimension"),
+    },
+    async ({ client_name, time_range, group_by }) => {
+      try {
+        const sb = getSupabase();
+        const client = await findClient(sb, client_name);
+        if (!client) return noClient(client_name);
+        const { since, until } = resolveDateRange(time_range);
+
+        const { data, error: qErr } = await sb
+          .from("demographic_insights")
+          .select("age_range, gender, spend, impressions, clicks, purchases, revenue")
+          .eq("client_id", client.id)
+          .gte("date", since)
+          .lte("date", until)
+          .neq("age_range", "all")
+          .neq("gender", "all");
+
+        if (qErr) return err(qErr.message);
+        if (!data?.length) return text(`Ingen demografisk data for ${client.name} i perioden.`);
+
+        type Agg = { spend: number; impressions: number; clicks: number; purchases: number; revenue: number };
+        const groups = new Map<string, Agg>();
+
+        for (const r of data) {
+          let key: string;
+          if (group_by === "age") key = r.age_range;
+          else if (group_by === "gender") key = r.gender;
+          else key = `${r.age_range} / ${r.gender}`;
+
+          if (!groups.has(key)) groups.set(key, { spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0 });
+          const g = groups.get(key)!;
+          g.spend += r.spend || 0;
+          g.impressions += r.impressions || 0;
+          g.clicks += r.clicks || 0;
+          g.purchases += r.purchases || 0;
+          g.revenue += r.revenue || 0;
+        }
+
+        const totalSpend = [...groups.values()].reduce((s, g) => s + g.spend, 0);
+        const sorted = [...groups.entries()].sort((a, b) => b[1].spend - a[1].spend);
+
+        const lines: string[] = [
+          `## ${client.name} – ${group_by === "age" ? "Aldersfordeling" : group_by === "gender" ? "Kønsfordeling" : "Alder × Køn"} | ${since} → ${until}\n`,
+          `| ${group_by === "gender" ? "Køn" : group_by === "age" ? "Alder" : "Segment"} | Spend | % | Impr. | Clicks | Køb | Revenue | ROAS |`,
+          `|---------|-------|---|-------|--------|-----|---------|------|`,
+        ];
+
+        for (const [key, g] of sorted) {
+          const pct = totalSpend > 0 ? ((g.spend / totalSpend) * 100).toFixed(1) : "0";
+          const roas = g.spend > 0 ? (g.revenue / g.spend).toFixed(2) + "x" : "–";
+          lines.push(`| ${key} | ${formatCurrency(g.spend)} | ${pct}% | ${formatNum(g.impressions)} | ${formatNum(g.clicks)} | ${formatNum(g.purchases)} | ${formatCurrency(g.revenue)} | ${roas} |`);
+        }
+
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(e.message);
+      }
+    }
+  );
+
+  // ─── Tool: get_placement_breakdown ────────────────────────────────────────
+  // Platform/placement/device breakdown.
+
+  server.tool(
+    "get_placement_breakdown",
+    "Platform/placement/device-breakdown: spend-fordeling på tværs af Facebook, Instagram, Audience Network, Messenger + placements (feed, stories, reels).",
+    {
+      client_name: z.string().describe("Klientnavn (fuzzy match)"),
+      time_range: z.string().default("last_30d").describe(TIME_RANGE_DESC),
+      group_by: z.enum(["platform", "placement", "device"]).default("platform").describe("Grupperingsdimension"),
+    },
+    async ({ client_name, time_range, group_by }) => {
+      try {
+        const sb = getSupabase();
+        const client = await findClient(sb, client_name);
+        if (!client) return noClient(client_name);
+        const { since, until } = resolveDateRange(time_range);
+
+        const { data, error: qErr } = await sb
+          .from("placement_insights")
+          .select("platform, placement, device_platform, spend, impressions, clicks")
+          .eq("client_id", client.id)
+          .gte("date", since)
+          .lte("date", until);
+
+        if (qErr) return err(qErr.message);
+        if (!data?.length) return text(`Ingen placement-data for ${client.name} i perioden.`);
+
+        type Agg = { spend: number; impressions: number; clicks: number };
+        const groups = new Map<string, Agg>();
+
+        for (const r of data) {
+          let key: string;
+          if (group_by === "platform") key = r.platform || "unknown";
+          else if (group_by === "placement") key = `${r.platform}/${r.placement}` || "unknown";
+          else key = r.device_platform || "unknown";
+
+          if (!groups.has(key)) groups.set(key, { spend: 0, impressions: 0, clicks: 0 });
+          const g = groups.get(key)!;
+          g.spend += r.spend || 0;
+          g.impressions += r.impressions || 0;
+          g.clicks += r.clicks || 0;
+        }
+
+        const totalSpend = [...groups.values()].reduce((s, g) => s + g.spend, 0);
+        const sorted = [...groups.entries()].sort((a, b) => b[1].spend - a[1].spend);
+
+        const dimLabel = group_by === "platform" ? "Platform" : group_by === "placement" ? "Placement" : "Device";
+        const lines: string[] = [
+          `## ${client.name} – ${dimLabel}-fordeling | ${since} → ${until}\n`,
+          `| ${dimLabel} | Spend | % | Impr. | Clicks | CTR |`,
+          `|------------|-------|---|-------|--------|-----|`,
+        ];
+
+        for (const [key, g] of sorted) {
+          const pct = totalSpend > 0 ? ((g.spend / totalSpend) * 100).toFixed(1) : "0";
+          const ctr = g.impressions > 0 ? ((g.clicks / g.impressions) * 100).toFixed(2) : "–";
+          lines.push(`| ${key} | ${formatCurrency(g.spend)} | ${pct}% | ${formatNum(g.impressions)} | ${formatNum(g.clicks)} | ${ctr}% |`);
+        }
+
+        lines.push(`\n*Note: Placement-data inkluderer kun spend/impressions/clicks (Meta API limitation — ingen konverteringsdata ved placement breakdown)*`);
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(e.message);
+      }
+    }
+  );
+
+  // ─── Tool: get_ad_details ─────────────────────────────────────────────────
+  // Full ad details with creative info.
+
+  server.tool(
+    "get_ad_details",
+    "Detaljer for specifikke ads: navn, status, creative (headline, body, CTA, thumbnail), og performance. Søg på ad-navn eller ID.",
+    {
+      client_name: z.string().describe("Klientnavn (fuzzy match)"),
+      search: z.string().optional().describe("Søg i ad-navne (fuzzy match)"),
+      campaign_id: z.string().optional().describe("Filtrer til specifik campaign"),
+      status: z.enum(["ACTIVE", "PAUSED", "all"]).default("all").describe("Status-filter"),
+      limit: z.number().default(20).describe("Max antal ads"),
+    },
+    async ({ client_name, search, campaign_id, status, limit: maxAds }) => {
+      try {
+        const sb = getSupabase();
+        const client = await findClient(sb, client_name);
+        if (!client) return noClient(client_name);
+
+        let query = sb
+          .from("ads")
+          .select("id, name, status, meta_ad_id, platform_ad_id, source, campaign_id, ad_set_id, creative_id")
+          .eq("client_id", client.id)
+          .order("updated_at", { ascending: false })
+          .limit(maxAds);
+
+        if (status !== "all") query = query.eq("status", status);
+        if (campaign_id) query = query.eq("campaign_id", campaign_id);
+
+        const { data: ads, error: qErr } = await query;
+        if (qErr) return err(qErr.message);
+        if (!ads?.length) return text(`Ingen ads fundet for ${client.name}`);
+
+        // Filter by search term
+        let filtered = ads;
+        if (search) {
+          const s = search.toLowerCase();
+          filtered = ads.filter(a => a.name?.toLowerCase().includes(s));
+          if (!filtered.length) return text(`Ingen ads matcher "${search}" for ${client.name}`);
+        }
+
+        // Fetch creatives for these ads
+        const creativeIds = [...new Set(filtered.map(a => a.creative_id).filter(Boolean))];
+        let creativeMap = new Map<string, any>();
+        if (creativeIds.length) {
+          const { data: creatives } = await sb.from("creatives").select("id, type, thumbnail_url, headline, body, cta_type, link_url").in("id", creativeIds);
+          creatives?.forEach(c => creativeMap.set(c.id, c));
+        }
+
+        const lines: string[] = [`## ${client.name} – Ad Details\n`];
+
+        for (const ad of filtered) {
+          const cr = ad.creative_id ? creativeMap.get(ad.creative_id) : null;
+          lines.push(`### ${ad.name || "Unnamed"}`);
+          lines.push(`- **Status:** ${ad.status} | **Source:** ${ad.source} | **ID:** ${ad.meta_ad_id || ad.platform_ad_id}`);
+          if (cr) {
+            lines.push(`- **Type:** ${cr.type || "–"} | **CTA:** ${cr.cta_type || "–"}`);
+            if (cr.headline) lines.push(`- **Headline:** ${cr.headline}`);
+            if (cr.body) lines.push(`- **Body:** ${cr.body.length > 200 ? cr.body.slice(0, 197) + "…" : cr.body}`);
+            if (cr.link_url) lines.push(`- **URL:** ${cr.link_url}`);
+            if (cr.thumbnail_url) lines.push(`- **Thumbnail:** ${cr.thumbnail_url}`);
+          }
+          lines.push("");
+        }
+
+        lines.push(`**Viser:** ${filtered.length} ads`);
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(e.message);
+      }
+    }
+  );
+
+  // ─── Tool: get_cross_client_overview ──────────────────────────────────────
+  // Multi-client performance comparison.
+
+  server.tool(
+    "get_cross_client_overview",
+    "Performance-overblik på tværs af ALLE klienter: spend, revenue, ROAS, purchases. Perfekt til agency-level overview.",
+    {
+      time_range: z.string().default("last_30d").describe(TIME_RANGE_DESC),
+      source: z.enum(["meta", "google_ads", "all"]).default("all").describe("Datakilde"),
+      sort_by: z.enum(["spend", "revenue", "roas", "purchases"]).default("spend").describe("Sortering"),
+    },
+    async ({ time_range, source, sort_by }) => {
+      try {
+        const sb = getSupabase();
+        const { since, until } = resolveDateRange(time_range);
+
+        // Get all active clients
+        const { data: clients } = await sb.from("clients").select("id, name").eq("is_active", true).order("name");
+        if (!clients?.length) return text("Ingen aktive klienter fundet.");
+
+        // Fetch insights for all clients
+        let query = sb
+          .from("insights")
+          .select("client_id, spend, impressions, clicks, purchases, purchase_value")
+          .gte("date", since)
+          .lte("date", until);
+
+        if (source !== "all") query = query.eq("source", source);
+
+        const { data, error: qErr } = await query;
+        if (qErr) return err(qErr.message);
+
+        // Aggregate per client
+        type Agg = { name: string; spend: number; impressions: number; clicks: number; purchases: number; revenue: number };
+        const clientMap = new Map<string, Agg>();
+        clients.forEach(c => clientMap.set(c.id, { name: c.name, spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0 }));
+
+        for (const r of data || []) {
+          const c = clientMap.get(r.client_id);
+          if (!c) continue;
+          c.spend += r.spend || 0;
+          c.impressions += r.impressions || 0;
+          c.clicks += r.clicks || 0;
+          c.purchases += r.purchases || 0;
+          c.revenue += r.purchase_value || 0;
+        }
+
+        // Filter clients with spend > 0 and sort
+        const active = [...clientMap.values()].filter(c => c.spend > 0);
+        active.sort((a, b) => {
+          if (sort_by === "roas") return (b.revenue / (b.spend || 1)) - (a.revenue / (a.spend || 1));
+          return (b as any)[sort_by] - (a as any)[sort_by];
+        });
+
+        const totals = active.reduce((t, c) => ({ spend: t.spend + c.spend, impressions: t.impressions + c.impressions, clicks: t.clicks + c.clicks, purchases: t.purchases + c.purchases, revenue: t.revenue + c.revenue }), { spend: 0, impressions: 0, clicks: 0, purchases: 0, revenue: 0 });
+
+        const lines: string[] = [
+          `## Agency Overview | ${since} → ${until}\n`,
+          `| Klient | Spend | Revenue | ROAS | Køb | Impr. | Clicks |`,
+          `|--------|-------|---------|------|-----|-------|--------|`,
+        ];
+
+        for (const c of active) {
+          const roas = c.spend > 0 ? (c.revenue / c.spend).toFixed(2) + "x" : "–";
+          lines.push(`| ${c.name} | ${formatCurrency(c.spend)} | ${formatCurrency(c.revenue)} | ${roas} | ${formatNum(c.purchases)} | ${formatNum(c.impressions)} | ${formatNum(c.clicks)} |`);
+        }
+
+        const totalRoas = totals.spend > 0 ? (totals.revenue / totals.spend).toFixed(2) + "x" : "–";
+        lines.push(`| **Total** | **${formatCurrency(totals.spend)}** | **${formatCurrency(totals.revenue)}** | **${totalRoas}** | **${formatNum(totals.purchases)}** | **${formatNum(totals.impressions)}** | **${formatNum(totals.clicks)}** |`);
+        lines.push(`\n**Klienter med spend:** ${active.length}/${clients.length} | **Kilde:** ${source === "all" ? "Meta + Google" : source}`);
+
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(e.message);
+      }
+    }
+  );
+
+  // ─── Tool: get_ad_image ───────────────────────────────────────────────────
+  // Returns creative thumbnail URL for visual preview.
+
+  server.tool(
+    "get_ad_image",
+    "Hent creative thumbnail/billede for en specifik ad. Returnerer URL til billedet fra Supabase Storage.",
+    {
+      client_name: z.string().describe("Klientnavn (fuzzy match)"),
+      ad_name: z.string().optional().describe("Søg i ad-navne"),
+      creative_id: z.string().optional().describe("Direkte creative ID"),
+      limit: z.number().default(5).describe("Max antal billeder"),
+    },
+    async ({ client_name, ad_name, creative_id, limit: maxImages }) => {
+      try {
+        const sb = getSupabase();
+        const client = await findClient(sb, client_name);
+        if (!client) return noClient(client_name);
+
+        if (creative_id) {
+          const { data } = await sb.from("creatives").select("id, meta_creative_id, type, thumbnail_url, media_url, media_storage_path, headline, body").eq("id", creative_id);
+          if (!data?.length) return text(`Creative ${creative_id} ikke fundet.`);
+          const c = data[0];
+          const url = c.media_storage_path
+            ? sb.storage.from("creative-thumbnails").getPublicUrl(c.media_storage_path).data.publicUrl
+            : c.thumbnail_url || c.media_url || "Intet billede";
+          return text(`## Creative: ${c.headline || c.meta_creative_id}\n\n- **Type:** ${c.type}\n- **Headline:** ${c.headline || "–"}\n- **Body:** ${c.body ? (c.body.length > 150 ? c.body.slice(0, 147) + "…" : c.body) : "–"}\n- **Billede:** ${url}`);
+        }
+
+        // Search by ad name
+        let query = sb
+          .from("creatives")
+          .select("id, meta_creative_id, type, thumbnail_url, media_url, media_storage_path, headline, body")
+          .eq("client_id", client.id)
+          .order("updated_at", { ascending: false })
+          .limit(maxImages * 3);
+
+        const { data: creatives, error: qErr } = await query;
+        if (qErr) return err(qErr.message);
+        if (!creatives?.length) return text(`Ingen creatives for ${client.name}`);
+
+        let filtered = creatives;
+        if (ad_name) {
+          // Find ads matching name, get their creative IDs
+          const { data: ads } = await sb.from("ads").select("creative_id, name").eq("client_id", client.id).ilike("name", `%${ad_name}%`).limit(maxImages);
+          if (ads?.length) {
+            const cids = new Set(ads.map(a => a.creative_id).filter(Boolean));
+            filtered = creatives.filter(c => cids.has(c.id));
+          }
+        }
+
+        if (!filtered.length) filtered = creatives.slice(0, maxImages);
+        else filtered = filtered.slice(0, maxImages);
+
+        const lines: string[] = [`## ${client.name} – Creative billeder\n`];
+        for (const c of filtered) {
+          const url = c.media_storage_path
+            ? sb.storage.from("creative-thumbnails").getPublicUrl(c.media_storage_path).data.publicUrl
+            : c.thumbnail_url || c.media_url || "–";
+          lines.push(`**${c.headline || c.meta_creative_id}** (${c.type})`);
+          lines.push(`${url}\n`);
+        }
+
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(e.message);
+      }
+    }
+  );
+
   // ─── Tool: setup_assistant ─────────────────────────────────────────────────
   // Returns a setup script that Claude Code can execute locally to install
   // skills, guides, and config from the nr-assistant git repo.
