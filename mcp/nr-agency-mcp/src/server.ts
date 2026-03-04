@@ -328,11 +328,13 @@ export function createMcpServer(): McpServer {
 
   server.tool(
     "get_brand_context",
-    "Hent KOMPLET brand-kontekst for en klient: profile (tone of voice, USP, målgruppe), brand research, VoC library, godkendt copy og strategi. BRUG ALTID DETTE FØR analyse, content-produktion eller rådgivning for en klient.",
+    "Hent KOMPLET brand-kontekst for en klient: profile (tone of voice, USP, målgruppe), brand research, VoC library, godkendt copy og strategi — PLUS N+R's Full Funnel metodik og analyse-frameworks. BRUG ALTID DETTE FØR analyse, content-produktion eller rådgivning for en klient.",
     {
       client_name: z.string().describe("Klientens navn (delvis match OK)"),
+      include_agency_frameworks: z.boolean().default(true)
+        .describe("Inkludér N+R's Full Funnel strategi og analyse-frameworks (default: true)"),
     },
-    async ({ client_name }) => {
+    async ({ client_name, include_agency_frameworks }) => {
       const sb = getSupabase();
 
       const { data: clients } = await sb
@@ -346,7 +348,7 @@ export function createMcpServer(): McpServer {
       }
       const client = clients[0];
 
-      // Hent alle docs, prioriteret rækkefølge
+      // Hent klient-docs
       const { data: docs } = await sb
         .from("client_documents")
         .select("doc_type, title, content, updated_at")
@@ -355,13 +357,36 @@ export function createMcpServer(): McpServer {
         .order("doc_type")
         .order("updated_at", { ascending: false });
 
-      if (!docs?.length) {
+      // Hent N+R agency frameworks (fra Neble+Rohde klient)
+      let agencyDocs: any[] = [];
+      if (include_agency_frameworks && client.name !== "Neble+Rohde") {
+        const { data: nrClients } = await sb
+          .from("clients")
+          .select("id")
+          .ilike("name", "%Neble%Rohde%")
+          .limit(1);
+
+        if (nrClients?.length) {
+          const { data: frameworks } = await sb
+            .from("client_documents")
+            .select("doc_type, title, content")
+            .eq("client_id", nrClients[0].id)
+            .eq("doc_type", "strategy")
+            .in("title", [
+              "N+R Full Funnel Strategi (FP → IM → IP → EC)",
+              "The Brand Lifecycle (4 Stages)",
+            ]);
+          if (frameworks) agencyDocs = frameworks;
+        }
+      }
+
+      if (!docs?.length && !agencyDocs.length) {
         return { content: [{ type: "text" as const, text: `Ingen brand-kontekst fundet for ${client.name}. Overvej at uploade profile, research og VoC via save_client_document.` }] };
       }
 
-      // Gruppér og formattér
-      const groups: Record<string, typeof docs> = {};
-      for (const d of docs) {
+      // Gruppér klient-docs
+      const groups: Record<string, any[]> = {};
+      for (const d of (docs || [])) {
         if (!groups[d.doc_type]) groups[d.doc_type] = [];
         groups[d.doc_type].push(d);
       }
@@ -380,6 +405,17 @@ export function createMcpServer(): McpServer {
         `*Valuta: ${client.currency || "DKK"} | Meta: ${client.meta_ad_account_id || "–"} | Opdateret: ${new Date().toISOString().split("T")[0]}*\n`,
       ];
 
+      // Agency methodology first (so it frames the analysis)
+      if (agencyDocs.length) {
+        sections.push(`## N+R Metodik & Full Funnel Strategi\n`);
+        sections.push(`*Analysér ALTID performance efter funnel-stadie: FP (Awareness) → IM (In-Market) → IP (Retargeting) → EC (Retention)*\n`);
+        for (const d of agencyDocs) {
+          sections.push(`### ${d.title}`);
+          sections.push(d.content);
+          sections.push("");
+        }
+      }
+
       for (const type of sectionOrder) {
         const group = groups[type];
         if (!group?.length) continue;
@@ -388,11 +424,82 @@ export function createMcpServer(): McpServer {
         for (const d of group) {
           sections.push(`### ${d.title}`);
           sections.push(d.content);
-          sections.push(""); // blank line
+          sections.push("");
         }
       }
 
-      sections.push(`\n---\n*Brug denne kontekst til at sikre brand-konsistens i analyser, copy og rådgivning. Tone, USP'er og målgruppe fra profile bør altid reflekteres.*`);
+      sections.push(`\n---\n*Brug denne kontekst til at sikre brand-konsistens i analyser, copy og rådgivning. Analysér altid efter N+R Full Funnel: FP → IM → IP → EC. Tone, USP'er og målgruppe fra profile bør altid reflekteres.*`);
+
+      return { content: [{ type: "text" as const, text: sections.join("\n") }] };
+    }
+  );
+
+  // ─── Tool: get_agency_knowledge ──────────────────────────────────────────────
+
+  server.tool(
+    "get_agency_knowledge",
+    "Hent N+R's samlede metodik: Full Funnel strategi (FP→IM→IP→EC), Brand Lifecycle, analyse-frameworks (Meta, Google, Klaviyo), copy-frameworks (email, Meta, Google) og strategi-framework. Brug dette til at forstå HVORDAN N+R analyserer og producerer content.",
+    {
+      framework: z.enum(["all", "full-funnel", "brand-lifecycle", "meta-analysis", "google-analysis", "klaviyo-analysis", "brand-strategy", "email-copy", "meta-copy", "google-copy", "market-research"])
+        .default("all")
+        .describe("Specifikt framework (all = hele metodik)"),
+    },
+    async ({ framework }) => {
+      const sb = getSupabase();
+
+      // Find Neble+Rohde client (holds agency knowledge)
+      const { data: nrClients } = await sb
+        .from("clients")
+        .select("id")
+        .ilike("name", "%Neble%Rohde%")
+        .limit(1);
+
+      if (!nrClients?.length) {
+        return { content: [{ type: "text" as const, text: "Neble+Rohde klient ikke fundet i Supabase." }] };
+      }
+
+      const titleMap: Record<string, string> = {
+        "full-funnel": "N+R Full Funnel Strategi (FP → IM → IP → EC)",
+        "brand-lifecycle": "The Brand Lifecycle (4 Stages)",
+        "meta-analysis": "N+R Analyse Framework – Meta Ads",
+        "google-analysis": "N+R Analyse Framework – Google Ads",
+        "klaviyo-analysis": "N+R Analyse Framework – Klaviyo",
+        "brand-strategy": "N+R Strategi Framework – Brand & Marketing",
+        "email-copy": "N+R Copy Framework – Email",
+        "meta-copy": "N+R Copy Framework – Meta Ads",
+        "google-copy": "N+R Copy Framework – Google Ads",
+        "market-research": "N+R Research Framework – Brand & Market",
+      };
+
+      let query = sb
+        .from("client_documents")
+        .select("title, content, updated_at")
+        .eq("client_id", nrClients[0].id)
+        .eq("doc_type", "strategy")
+        .eq("created_by", "agency-knowledge");
+
+      if (framework !== "all") {
+        const title = titleMap[framework];
+        if (title) query = query.eq("title", title);
+      }
+
+      const { data: docs, error } = await query.order("title");
+      if (error) return { content: [{ type: "text" as const, text: `Fejl: ${error.message}` }] };
+
+      if (!docs?.length) {
+        return { content: [{ type: "text" as const, text: `Ingen agency knowledge fundet${framework !== "all" ? ` for "${framework}"` : ""}.` }] };
+      }
+
+      const sections = [
+        `# N+R Agency Knowledge${framework !== "all" ? ` — ${framework}` : ""}`,
+        `*${docs.length} framework${docs.length === 1 ? "" : "s"} | Opdateret: ${docs[0].updated_at?.split("T")[0]}*\n`,
+      ];
+
+      for (const d of docs) {
+        sections.push(`## ${d.title}\n`);
+        sections.push(d.content);
+        sections.push("");
+      }
 
       return { content: [{ type: "text" as const, text: sections.join("\n") }] };
     }
