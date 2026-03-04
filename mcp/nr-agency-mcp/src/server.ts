@@ -17,6 +17,18 @@ import type {
   TargetsResponse,
   LeadCohortsResponse,
 } from "./types/dashboard-api.js";
+import { resolveKlaviyoApiKey } from "./klaviyo-credentials.js";
+import {
+  getEmailMetrics,
+  getSubscriberStats,
+  getFlowsWithPerformance,
+  getCampaignsWithPerformance,
+  getRevenueAttribution,
+  listLists,
+  listSegments,
+  listMetrics,
+  validateApiKey,
+} from "./klaviyo-client.js";
 
 // ─── Supabase setup ─────────────────────────────────────────────────────────
 
@@ -1682,6 +1694,491 @@ export function createMcpServer(): McpServer {
       ];
 
       return text(lines.join("\n"));
+    }
+  );
+
+  // ─── Tool: get_klaviyo_overview ─────────────────────────────────────────────
+
+  server.tool(
+    "get_klaviyo_overview",
+    "Klaviyo email-overblik: sendt, åbnet, klikket, orders, revenue + subscriber count",
+    {
+      client_name: z.string().describe("Klientens navn"),
+      time_range: z.string().default("last_30d").describe(TIME_RANGE_DESC),
+    },
+    async ({ client_name, time_range }) => {
+      const sb = getSupabase();
+      const client = await findClient(sb, client_name);
+      if (!client) return noClient(client_name);
+
+      let apiKey: string;
+      try { apiKey = await resolveKlaviyoApiKey(sb, client.id); } catch {
+        return text(`Ingen Klaviyo-forbindelse for ${client.name}`);
+      }
+
+      const { since, until } = resolveDateRange(time_range);
+
+      try {
+        const [emailData, subStats] = await Promise.all([
+          getEmailMetrics(apiKey, since, until),
+          getSubscriberStats(apiKey),
+        ]);
+
+        const openRate = emailData.received > 0 ? ((emailData.opened / emailData.received) * 100).toFixed(1) : "–";
+        const clickRate = emailData.received > 0 ? ((emailData.clicked / emailData.received) * 100).toFixed(1) : "–";
+        const rpe = emailData.received > 0 ? (emailData.revenue / emailData.received).toFixed(2) : "–";
+
+        const lines = [
+          `## ${client.name} – Klaviyo Overblik (${time_range})`,
+          ``,
+          `| Metric | Værdi |`,
+          `|--------|-------|`,
+          `| Sendt | ${formatNum(emailData.received)} |`,
+          `| Åbnet | ${formatNum(emailData.opened)} (${openRate}%) |`,
+          `| Klikket | ${formatNum(emailData.clicked)} (${clickRate}%) |`,
+          `| Orders | ${formatNum(emailData.ordersPlaced)} |`,
+          `| Revenue | ${formatCurrency(emailData.revenue)} |`,
+          `| Rev/email | ${rpe} kr |`,
+          ``,
+          `**Subscribers:** ~${formatNum(subStats.totalProfiles)} profiler på tværs af ${subStats.lists.length} lister`,
+        ];
+
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(`Klaviyo API: ${e.message}`);
+      }
+    }
+  );
+
+  // ─── Tool: get_klaviyo_flows ──────────────────────────────────────────────
+
+  server.tool(
+    "get_klaviyo_flows",
+    "Alle Klaviyo flows med performance: sendt, open%, click%, revenue",
+    {
+      client_name: z.string().describe("Klientens navn"),
+      time_range: z.string().default("last_30d").describe(TIME_RANGE_DESC),
+    },
+    async ({ client_name, time_range }) => {
+      const sb = getSupabase();
+      const client = await findClient(sb, client_name);
+      if (!client) return noClient(client_name);
+
+      let apiKey: string;
+      try { apiKey = await resolveKlaviyoApiKey(sb, client.id); } catch {
+        return text(`Ingen Klaviyo-forbindelse for ${client.name}`);
+      }
+
+      const { since, until } = resolveDateRange(time_range);
+
+      try {
+        const flows = await getFlowsWithPerformance(apiKey, since, until);
+
+        if (!flows.length) return text(`Ingen flows fundet for ${client.name}`);
+
+        const sorted = [...flows].sort((a, b) => b.revenue - a.revenue);
+        const totalRevenue = sorted.reduce((s, f) => s + f.revenue, 0);
+
+        const lines = [
+          `## ${client.name} – Klaviyo Flows (${time_range})`,
+          ``,
+          `| Flow | Status | Sendt | Open% | Click% | Revenue | Rev/email |`,
+          `|------|--------|-------|-------|--------|---------|-----------|`,
+          ...sorted.map((f) =>
+            `| ${f.name} | ${f.status} | ${formatNum(f.received)} | ${f.openRate.toFixed(1)}% | ${f.clickRate.toFixed(1)}% | ${formatCurrency(f.revenue)} | ${f.revenuePerEmail.toFixed(1)} kr |`
+          ),
+          ``,
+          `**Total flow revenue:** ${formatCurrency(totalRevenue)}`,
+        ];
+
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(`Klaviyo API: ${e.message}`);
+      }
+    }
+  );
+
+  // ─── Tool: get_klaviyo_campaigns ──────────────────────────────────────────
+
+  server.tool(
+    "get_klaviyo_campaigns",
+    "Klaviyo campaigns med performance, sorteret efter seneste send",
+    {
+      client_name: z.string().describe("Klientens navn"),
+      time_range: z.string().default("last_30d").describe(TIME_RANGE_DESC),
+      limit: z.number().default(20).describe("Max antal campaigns"),
+    },
+    async ({ client_name, time_range, limit: maxCampaigns }) => {
+      const sb = getSupabase();
+      const client = await findClient(sb, client_name);
+      if (!client) return noClient(client_name);
+
+      let apiKey: string;
+      try { apiKey = await resolveKlaviyoApiKey(sb, client.id); } catch {
+        return text(`Ingen Klaviyo-forbindelse for ${client.name}`);
+      }
+
+      const { since, until } = resolveDateRange(time_range);
+
+      try {
+        const campaigns = await getCampaignsWithPerformance(apiKey, since, until);
+
+        if (!campaigns.length) return text(`Ingen campaigns fundet for ${client.name} i perioden`);
+
+        const sent = campaigns.filter((c) => c.status === "Sent");
+        const sorted = [...sent].sort((a, b) => (b.send_time || "").localeCompare(a.send_time || "")).slice(0, maxCampaigns);
+
+        const lines = [
+          `## ${client.name} – Klaviyo Campaigns (${time_range})`,
+          ``,
+          `| Campaign | Send dato | Sendt | Open% | Click% | CTOR | Revenue |`,
+          `|----------|-----------|-------|-------|--------|------|---------|`,
+          ...sorted.map((c) => {
+            const sendDate = c.send_time ? c.send_time.split("T")[0] : "–";
+            return `| ${c.name.slice(0, 40)} | ${sendDate} | ${formatNum(c.received)} | ${c.openRate.toFixed(1)}% | ${c.clickRate.toFixed(1)}% | ${c.ctor.toFixed(1)}% | ${formatCurrency(c.revenue)} |`;
+          }),
+          ``,
+          `**${sent.length} sendte campaigns** i perioden`,
+        ];
+
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(`Klaviyo API: ${e.message}`);
+      }
+    }
+  );
+
+  // ─── Tool: get_klaviyo_revenue ────────────────────────────────────────────
+
+  server.tool(
+    "get_klaviyo_revenue",
+    "Klaviyo revenue attribution: flows vs campaigns, top 5 af hver",
+    {
+      client_name: z.string().describe("Klientens navn"),
+      time_range: z.string().default("last_30d").describe(TIME_RANGE_DESC),
+    },
+    async ({ client_name, time_range }) => {
+      const sb = getSupabase();
+      const client = await findClient(sb, client_name);
+      if (!client) return noClient(client_name);
+
+      let apiKey: string;
+      try { apiKey = await resolveKlaviyoApiKey(sb, client.id); } catch {
+        return text(`Ingen Klaviyo-forbindelse for ${client.name}`);
+      }
+
+      const { since, until } = resolveDateRange(time_range);
+
+      try {
+        const rev = await getRevenueAttribution(apiKey, since, until);
+
+        const lines = [
+          `## ${client.name} – Klaviyo Revenue Attribution (${time_range})`,
+          ``,
+          `| Kilde | Revenue | Andel |`,
+          `|-------|---------|-------|`,
+          `| Flows | ${formatCurrency(rev.flowRevenue)} | ${rev.flowPercentage.toFixed(1)}% |`,
+          `| Campaigns | ${formatCurrency(rev.campaignRevenue)} | ${rev.campaignPercentage.toFixed(1)}% |`,
+          `| **Total** | **${formatCurrency(rev.totalRevenue)}** | 100% |`,
+          ``,
+        ];
+
+        if (rev.topFlows.length > 0) {
+          lines.push(`### Top flows`, `| Flow | Revenue |`, `|------|---------|`);
+          rev.topFlows.forEach((f) => lines.push(`| ${f.name} | ${formatCurrency(f.revenue)} |`));
+          lines.push(``);
+        }
+
+        if (rev.topCampaigns.length > 0) {
+          lines.push(`### Top campaigns`, `| Campaign | Revenue |`, `|----------|---------|`);
+          rev.topCampaigns.forEach((c) => lines.push(`| ${c.name.slice(0, 50)} | ${formatCurrency(c.revenue)} |`));
+        }
+
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(`Klaviyo API: ${e.message}`);
+      }
+    }
+  );
+
+  // ─── Tool: get_klaviyo_lists ──────────────────────────────────────────────
+
+  server.tool(
+    "get_klaviyo_lists",
+    "Klaviyo subscriber-lister med profil-antal",
+    {
+      client_name: z.string().describe("Klientens navn"),
+    },
+    async ({ client_name }) => {
+      const sb = getSupabase();
+      const client = await findClient(sb, client_name);
+      if (!client) return noClient(client_name);
+
+      let apiKey: string;
+      try { apiKey = await resolveKlaviyoApiKey(sb, client.id); } catch {
+        return text(`Ingen Klaviyo-forbindelse for ${client.name}`);
+      }
+
+      try {
+        const stats = await getSubscriberStats(apiKey);
+
+        const lines = [
+          `## ${client.name} – Klaviyo Lister`,
+          ``,
+          `| Liste | Profiler |`,
+          `|-------|----------|`,
+          ...stats.lists.map((l) => `| ${l.name} | ${l.profileCount > 0 ? `~${formatNum(l.profileCount)}+` : "0"} |`),
+          ``,
+          `**Total:** ~${formatNum(stats.totalProfiles)} profiler (estimat)`,
+        ];
+
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(`Klaviyo API: ${e.message}`);
+      }
+    }
+  );
+
+  // ─── Tool: get_klaviyo_segments ───────────────────────────────────────────
+
+  server.tool(
+    "get_klaviyo_segments",
+    "Klaviyo segmenter med status og profil-antal",
+    {
+      client_name: z.string().describe("Klientens navn"),
+    },
+    async ({ client_name }) => {
+      const sb = getSupabase();
+      const client = await findClient(sb, client_name);
+      if (!client) return noClient(client_name);
+
+      let apiKey: string;
+      try { apiKey = await resolveKlaviyoApiKey(sb, client.id); } catch {
+        return text(`Ingen Klaviyo-forbindelse for ${client.name}`);
+      }
+
+      try {
+        const stats = await getSubscriberStats(apiKey);
+
+        const lines = [
+          `## ${client.name} – Klaviyo Segmenter`,
+          ``,
+          `| Segment | Aktiv | Starred | Profiler |`,
+          `|---------|-------|---------|----------|`,
+          ...stats.segments.map((s) =>
+            `| ${s.name} | ${s.isActive ? "✓" : "–"} | ${s.isStarred ? "★" : "–"} | ${s.profileCount > 0 ? `~${formatNum(s.profileCount)}+` : "0"} |`
+          ),
+        ];
+
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(`Klaviyo API: ${e.message}`);
+      }
+    }
+  );
+
+  // ─── Tool: get_klaviyo_metrics ────────────────────────────────────────────
+
+  server.tool(
+    "get_klaviyo_metrics",
+    "Tilgængelige Klaviyo metrics/events i kontoen",
+    {
+      client_name: z.string().describe("Klientens navn"),
+    },
+    async ({ client_name }) => {
+      const sb = getSupabase();
+      const client = await findClient(sb, client_name);
+      if (!client) return noClient(client_name);
+
+      let apiKey: string;
+      try { apiKey = await resolveKlaviyoApiKey(sb, client.id); } catch {
+        return text(`Ingen Klaviyo-forbindelse for ${client.name}`);
+      }
+
+      try {
+        const metrics = await listMetrics(apiKey);
+
+        const lines = [
+          `## ${client.name} – Klaviyo Metrics`,
+          ``,
+          `| Metric | Integration | ID |`,
+          `|--------|-------------|----|`,
+          ...metrics.map((m) =>
+            `| ${m.name} | ${m.integration?.name || "–"} | ${m.id} |`
+          ),
+          ``,
+          `**${metrics.length} metrics** tilgængelige`,
+        ];
+
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(`Klaviyo API: ${e.message}`);
+      }
+    }
+  );
+
+  // ─── Tool: get_klaviyo_health ─────────────────────────────────────────────
+
+  server.tool(
+    "get_klaviyo_health",
+    "Check Klaviyo-forbindelse: valider API key og hent basis-info",
+    {
+      client_name: z.string().describe("Klientens navn"),
+    },
+    async ({ client_name }) => {
+      const sb = getSupabase();
+      const client = await findClient(sb, client_name);
+      if (!client) return noClient(client_name);
+
+      let apiKey: string;
+      try { apiKey = await resolveKlaviyoApiKey(sb, client.id); } catch {
+        return text(`❌ Ingen Klaviyo API key fundet for ${client.name}`);
+      }
+
+      try {
+        const valid = await validateApiKey(apiKey);
+        if (!valid) return text(`❌ Klaviyo API key for ${client.name} er ugyldig`);
+
+        const [metrics, lists, segments] = await Promise.all([
+          listMetrics(apiKey),
+          listLists(apiKey),
+          listSegments(apiKey),
+        ]);
+
+        const lines = [
+          `## ${client.name} – Klaviyo Health Check`,
+          ``,
+          `✅ **API key er gyldig**`,
+          `- ${metrics.length} metrics tilgængelige`,
+          `- ${lists.length} lister`,
+          `- ${segments.length} segmenter`,
+        ];
+
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(`Klaviyo health check fejlede: ${e.message}`);
+      }
+    }
+  );
+
+  // ─── Tool: setup_assistant ─────────────────────────────────────────────────
+  // Returns a setup script that Claude Code can execute locally to install
+  // skills, guides, and config from the nr-assistant git repo.
+
+  server.tool(
+    "setup_assistant",
+    "Installer NR Assistant (skills, guides, MCP config) på denne computer. Returnerer et setup-script som Claude Code kører lokalt.",
+    {},
+    async () => {
+      const REPO_URL = "https://github.com/se-nr/nr-assistant.git";
+      const script = `#!/bin/bash
+set -e
+
+NR_DIR="$HOME/.claude/nr-assistant"
+SKILLS_DIR="$HOME/.claude/skills"
+
+GREEN='\\033[0;32m'
+YELLOW='\\033[1;33m'
+BLUE='\\033[0;34m'
+NC='\\033[0m'
+
+ok()   { echo -e "  \${GREEN}✓\${NC} $1"; }
+warn() { echo -e "  \${YELLOW}⚠\${NC}  $1"; }
+info() { echo -e "  \${BLUE}→\${NC} $1"; }
+step() { echo -e "\\n\${BLUE}$1\${NC}"; }
+
+echo ""
+echo "╔══════════════════════════════════════╗"
+echo "║    NR Assistant – Remote Setup       ║"
+echo "╚══════════════════════════════════════╝"
+echo ""
+
+# ─── 1. Clone or update repo ────────────────────────────────────────────────
+step "1/3  Git repo"
+
+if [ -d "$NR_DIR/.git" ]; then
+  info "Opdaterer eksisterende repo..."
+  cd "$NR_DIR" && git pull --ff-only origin main
+  ok "nr-assistant opdateret"
+else
+  info "Kloner nr-assistant..."
+  mkdir -p "$HOME/.claude"
+  git clone ${REPO_URL} "$NR_DIR"
+  ok "nr-assistant klonet"
+fi
+
+VERSION=$(cat "$NR_DIR/VERSION" 2>/dev/null || echo "unknown")
+info "Version: $VERSION"
+
+# ─── 2. Install skills ──────────────────────────────────────────────────────
+step "2/3  Skills"
+
+mkdir -p "$SKILLS_DIR"
+
+for skill_dir in "$NR_DIR/skills"/*/; do
+  skill_name=$(basename "$skill_dir")
+  if [ -f "$skill_dir/SKILL.md" ]; then
+    mkdir -p "$SKILLS_DIR/$skill_name"
+    cp "$skill_dir/SKILL.md" "$SKILLS_DIR/$skill_name/SKILL.md"
+    ok "$skill_name"
+  fi
+done
+
+# ─── 3. NotebookLM skill ────────────────────────────────────────────────────
+step "3/3  NotebookLM"
+
+NOTEBOOKLM_DIR="$SKILLS_DIR/notebooklm"
+if [ -d "$NOTEBOOKLM_DIR" ]; then
+  ok "NotebookLM allerede installeret"
+else
+  if git clone --quiet https://github.com/PleasePrompto/notebooklm-skill "$NOTEBOOKLM_DIR" 2>/dev/null; then
+    ok "NotebookLM klonet"
+  else
+    warn "NotebookLM clone fejlede – spring over"
+  fi
+fi
+
+if [ -f "$NR_DIR/mcp/notebooklm/mcp_server.py" ] && [ ! -f "$NOTEBOOKLM_DIR/mcp_server.py" ]; then
+  cp "$NR_DIR/mcp/notebooklm/mcp_server.py" "$NOTEBOOKLM_DIR/mcp_server.py"
+  cp "$NR_DIR/mcp/notebooklm/start_mcp.sh" "$NOTEBOOKLM_DIR/start_mcp.sh"
+  chmod +x "$NOTEBOOKLM_DIR/start_mcp.sh"
+  ok "NotebookLM MCP server kopieret"
+fi
+
+echo ""
+echo "══════════════════════════════════════════"
+echo -e "\${GREEN}  NR Assistant installeret!\${NC}"
+echo "══════════════════════════════════════════"
+echo ""
+echo "Tilgængelige skills:"
+for skill_dir in "$NR_DIR/skills"/*/; do
+  skill_name=$(basename "$skill_dir")
+  echo "  /$skill_name"
+done
+echo "  /notebooklm"
+echo ""
+echo "Opdater senere: cd ~/.claude/nr-assistant && git pull"
+echo ""
+`;
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `## NR Assistant Setup
+
+Kør dette script for at installere NR Assistant (skills, guides, config) fra GitHub:
+
+\`\`\`bash
+${script}
+\`\`\`
+
+**Instruktion til Claude Code:** Kør ovenstående bash-script for at installere NR Assistant på brugerens maskine. Scriptet kloner repo'et fra GitHub, kopierer skills til ~/.claude/skills/, og opsætter NotebookLM.
+
+**Opdatering:** Kør \`setup_assistant\` igen for at hente seneste version.`,
+          },
+        ],
+      };
     }
   );
 

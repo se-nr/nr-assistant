@@ -10,7 +10,7 @@
       "description": "Query Supabase for Meta Ads performance data, top ads, demographics, and client context. Requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY env vars.",
       "type": "stdio",
       "command": "node",
-      "args": ["${PLUGIN_DIR}/mcp/nr-agency-mcp/dist/index.js"],
+      "args": ["${PLUGIN_DIR}/mcp/nr-agency-mcp/dist/src/index.js"],
       "env": {
         "SUPABASE_URL": "",
         "SUPABASE_SERVICE_ROLE_KEY": ""
