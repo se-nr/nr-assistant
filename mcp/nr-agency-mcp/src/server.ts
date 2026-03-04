@@ -85,7 +85,7 @@ export function createMcpServer(): McpServer {
 
   server.tool(
     "get_performance",
-    "Hent aggregeret performance for en klient (spend, ROAS, purchases, reach). Angiv client_name og time_range.",
+    "Hent aggregeret performance for en klient (spend, ROAS, purchases, reach). Kald get_brand_context først for at forstå klientens brand, målgruppe og strategi.",
     {
       client_name: z.string().describe("Klientens navn (delvis match OK, fx 'zizzi', 'gastro')"),
       time_range: z.string().default("last_30d").describe(TIME_RANGE_DESC),
@@ -152,7 +152,7 @@ export function createMcpServer(): McpServer {
 
   server.tool(
     "get_top_ads",
-    "Top-performende annoncer for en klient sorteret efter ROAS eller spend",
+    "Top-performende annoncer for en klient sorteret efter ROAS eller spend. Kald get_brand_context først for at forstå klientens kreative strategi.",
     {
       client_name: z.string().describe("Klientens navn"),
       time_range: z.string().default("last_30d").describe(TIME_RANGE_DESC),
@@ -321,6 +321,80 @@ export function createMcpServer(): McpServer {
 
       if (error) return { content: [{ type: "text" as const, text: `Fejl ved oprettelse: ${error.message}` }] };
       return { content: [{ type: "text" as const, text: `Gemt: "${title}" (${doc_type}) for ${client.name}` }] };
+    }
+  );
+
+  // ─── Tool: get_brand_context ──────────────────────────────────────────────
+
+  server.tool(
+    "get_brand_context",
+    "Hent KOMPLET brand-kontekst for en klient: profile (tone of voice, USP, målgruppe), brand research, VoC library, godkendt copy og strategi. BRUG ALTID DETTE FØR analyse, content-produktion eller rådgivning for en klient.",
+    {
+      client_name: z.string().describe("Klientens navn (delvis match OK)"),
+    },
+    async ({ client_name }) => {
+      const sb = getSupabase();
+
+      const { data: clients } = await sb
+        .from("clients")
+        .select("id, name, slug, currency, meta_ad_account_id")
+        .ilike("name", `%${client_name}%`)
+        .limit(1);
+
+      if (!clients?.length) {
+        return { content: [{ type: "text" as const, text: `Ingen klient fundet: "${client_name}"` }] };
+      }
+      const client = clients[0];
+
+      // Hent alle docs, prioriteret rækkefølge
+      const { data: docs } = await sb
+        .from("client_documents")
+        .select("doc_type, title, content, updated_at")
+        .eq("client_id", client.id)
+        .in("doc_type", ["overview", "research", "brief", "strategy", "history"])
+        .order("doc_type")
+        .order("updated_at", { ascending: false });
+
+      if (!docs?.length) {
+        return { content: [{ type: "text" as const, text: `Ingen brand-kontekst fundet for ${client.name}. Overvej at uploade profile, research og VoC via save_client_document.` }] };
+      }
+
+      // Gruppér og formattér
+      const groups: Record<string, typeof docs> = {};
+      for (const d of docs) {
+        if (!groups[d.doc_type]) groups[d.doc_type] = [];
+        groups[d.doc_type].push(d);
+      }
+
+      const sectionOrder = ["overview", "research", "brief", "strategy", "history"];
+      const sectionLabels: Record<string, string> = {
+        overview: "Klient-profil (Tone of Voice, USP, målgruppe)",
+        research: "Brand & Market Research + VoC",
+        brief: "Godkendt Copy & Briefs",
+        strategy: "Strategier & Flows",
+        history: "Performance History & Learnings",
+      };
+
+      const sections: string[] = [
+        `# ${client.name} — Brand-kontekst`,
+        `*Valuta: ${client.currency || "DKK"} | Meta: ${client.meta_ad_account_id || "–"} | Opdateret: ${new Date().toISOString().split("T")[0]}*\n`,
+      ];
+
+      for (const type of sectionOrder) {
+        const group = groups[type];
+        if (!group?.length) continue;
+
+        sections.push(`## ${sectionLabels[type] || type}\n`);
+        for (const d of group) {
+          sections.push(`### ${d.title}`);
+          sections.push(d.content);
+          sections.push(""); // blank line
+        }
+      }
+
+      sections.push(`\n---\n*Brug denne kontekst til at sikre brand-konsistens i analyser, copy og rådgivning. Tone, USP'er og målgruppe fra profile bør altid reflekteres.*`);
+
+      return { content: [{ type: "text" as const, text: sections.join("\n") }] };
     }
   );
 
@@ -655,7 +729,7 @@ export function createMcpServer(): McpServer {
 
   server.tool(
     "compare_periods",
-    "Sammenlign performance mellem to perioder (fx denne måned vs forrige)",
+    "Sammenlign performance mellem to perioder (fx denne måned vs forrige). Kald get_brand_context først for klient-kontekst.",
     {
       client_name: z.string().describe("Klientens navn"),
       period_a: z.string().describe("Første periode (nyeste). " + TIME_RANGE_DESC),

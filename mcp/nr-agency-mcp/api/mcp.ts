@@ -109,6 +109,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         "update_assistant",
         "create_client",
         "trigger_backfill",
+        "get_brand_context",
         "get_google_ad_accounts",
         "connect_google_ads",
       ],
