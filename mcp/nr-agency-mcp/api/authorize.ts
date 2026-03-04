@@ -4,17 +4,16 @@
  * GET /authorize?response_type=code&client_id=...&redirect_uri=...
  *     &code_challenge=...&code_challenge_method=S256&state=...
  *
- * Redirects to Supabase Google OAuth with PKCE.
+ * Redirects to Supabase Google OAuth (implicit flow).
  * After successful Google login, the user is redirected through
  * /api/auth/callback → /api/auth/complete, which issues the MCP auth code.
  *
- * State (MCP OAuth params + Supabase PKCE verifier) is stored in a
- * secure HTTP-only cookie to avoid query-param issues with Supabase
- * redirect URL matching.
+ * MCP OAuth params are stored in a secure HTTP-only cookie to avoid
+ * query-param issues with Supabase redirect URL matching.
  */
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createHmac, randomBytes, createHash } from "crypto";
+import { createHmac } from "crypto";
 
 const CLIENT_ID = process.env.OAUTH_CLIENT_ID;
 const SIGN_SECRET = process.env.OAUTH_SIGN_SECRET;
@@ -97,30 +96,22 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     state,
   });
 
-  // Generate Supabase PKCE pair (separate from MCP's PKCE)
-  const sbCodeVerifier = randomBytes(32).toString("base64url");
-  const sbCodeChallenge = createHash("sha256")
-    .update(sbCodeVerifier)
-    .digest("base64url");
-
-  // Store pending state + Supabase code verifier in cookie
+  // Store pending state in cookie
   // (avoids query-param issues with Supabase redirect URL matching)
   const cookieValue = encodeURIComponent(
-    JSON.stringify({ pending: pendingBlob, cv: sbCodeVerifier })
+    JSON.stringify({ pending: pendingBlob })
   );
   res.setHeader(
     "Set-Cookie",
     `mcp_auth_state=${cookieValue}; Path=/api/auth; HttpOnly; Secure; SameSite=Lax; Max-Age=${PENDING_TTL}`
   );
 
-  // Build Supabase Google OAuth URL with PKCE
+  // Build Supabase Google OAuth URL (implicit flow — no PKCE)
   const callbackUrl = `${BASE_URL}/api/auth/callback`;
 
   const authUrl = new URL(`${SUPABASE_URL}/auth/v1/authorize`);
   authUrl.searchParams.set("provider", "google");
   authUrl.searchParams.set("redirect_to", callbackUrl);
-  authUrl.searchParams.set("code_challenge", sbCodeChallenge);
-  authUrl.searchParams.set("code_challenge_method", "S256");
 
   // Redirect to Google login via Supabase
   res.redirect(302, authUrl.toString());

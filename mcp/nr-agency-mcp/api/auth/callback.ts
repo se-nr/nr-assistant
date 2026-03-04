@@ -1,27 +1,21 @@
 /**
- * OAuth Callback — handles both Supabase auth flows
+ * OAuth Callback — HTML bridge for Supabase implicit flow
  *
- * GET /api/auth/callback?code={supabase_pkce_code}     — PKCE flow
- * GET /api/auth/callback#access_token={supabase_jwt}    — Implicit flow
+ * GET /api/auth/callback#access_token={supabase_jwt}&...
  *
- * After Google OAuth, Supabase redirects here. Depending on the Supabase
- * config, it either returns a PKCE code (?code=) or an implicit token
- * (#access_token=). We handle both:
+ * After Google OAuth, Supabase redirects here with the access token in the
+ * URL hash fragment. Since the server can't read hash fragments, this
+ * endpoint serves an HTML page that reads the token client-side and
+ * redirects to the server-side /api/auth/complete endpoint.
  *
- *   PKCE: Exchange code server-side using code_verifier from cookie
- *   Implicit: Serve HTML bridge to read hash fragment client-side
- *
- * Both paths redirect to /api/auth/complete with the Supabase access token.
+ * The MCP OAuth params (pending blob) are read from a secure HTTP-only
+ * cookie set by /authorize.
  */
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
-
 interface AuthState {
   pending: string; // signed blob with MCP OAuth params
-  cv: string;      // Supabase PKCE code_verifier
 }
 
 function readAuthCookie(req: VercelRequest): AuthState | null {
@@ -63,11 +57,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    errorPage(res, 500, "Server Error", "Missing Supabase configuration.");
-    return;
-  }
-
   // Read auth state from cookie (set by /authorize)
   const authState = readAuthCookie(req);
   if (!authState) {
@@ -80,55 +69,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  // ── Case 1: PKCE flow — Supabase returned ?code= ────────────────────
-  const code = String(req.query.code || "");
-  if (code) {
-    try {
-      const tokenRes = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=pkce`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          apikey: SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify({
-          auth_code: code,
-          code_verifier: authState.cv,
-        }),
-      });
-
-      if (!tokenRes.ok) {
-        const errBody = await tokenRes.text();
-        console.error("Supabase PKCE token exchange failed:", tokenRes.status, errBody);
-        errorPage(res, 401, "Authentication Failed", "Could not verify your Google login. Please try again.");
-        return;
-      }
-
-      const session = await tokenRes.json();
-      const sbAccessToken = session.access_token;
-
-      if (!sbAccessToken) {
-        errorPage(res, 401, "Authentication Failed", "No access token received. Please try again.");
-        return;
-      }
-
-      // Clear cookie and redirect to complete endpoint
-      res.setHeader("Set-Cookie", clearCookieHeader());
-      res.redirect(
-        302,
-        `/api/auth/complete?sb_token=${encodeURIComponent(sbAccessToken)}&pending=${encodeURIComponent(authState.pending)}`
-      );
-    } catch (e: any) {
-      console.error("Supabase token exchange error:", e);
-      errorPage(res, 500, "Server Error", `Authentication failed: ${e.message}`);
-    }
-    return;
-  }
-
-  // ── Case 2: Implicit flow — tokens in hash fragment ──────────────────
-  // Serve HTML bridge that reads #access_token client-side and redirects
+  // Serve HTML bridge that reads #access_token from hash fragment
+  // and redirects to the server-side /api/auth/complete endpoint
   const pendingJson = JSON.stringify(authState.pending);
 
-  // Clear the cookie in this response
+  // Clear the auth cookie now that we've read it
   res.setHeader("Set-Cookie", clearCookieHeader());
   res.setHeader("Content-Type", "text/html");
   res.status(200).send(`<!DOCTYPE html>
