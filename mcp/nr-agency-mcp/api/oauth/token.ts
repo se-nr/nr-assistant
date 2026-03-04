@@ -23,7 +23,22 @@ const CLIENT_ID = process.env.OAUTH_CLIENT_ID;
 const CLIENT_SECRET = process.env.OAUTH_CLIENT_SECRET;
 const SIGN_SECRET = process.env.OAUTH_SIGN_SECRET;
 
-const TOKEN_TTL = 3600; // 1 hour
+const TOKEN_TTL_OAUTH = 2592000; // 30 days (for user OAuth tokens)
+const TOKEN_TTL_CLIENT = 3600;   // 1 hour (for client_credentials)
+
+export interface TokenPayload {
+  exp: number;
+  iss: string;
+  email?: string;
+  role?: string;
+  name?: string;
+}
+
+interface TokenUser {
+  email: string;
+  role: string;
+  name: string;
+}
 
 function safeEqual(a: string, b: string): boolean {
   const bufA = Buffer.from(a);
@@ -32,26 +47,34 @@ function safeEqual(a: string, b: string): boolean {
   return timingSafeEqual(bufA, bufB);
 }
 
-function makeToken(): string {
-  const exp = Math.floor(Date.now() / 1000) + TOKEN_TTL;
-  const payload = Buffer.from(JSON.stringify({ exp, iss: "nr-agency-mcp" })).toString("base64url");
+function makeToken(user?: TokenUser): { accessToken: string; expiresIn: number } {
+  const ttl = user ? TOKEN_TTL_OAUTH : TOKEN_TTL_CLIENT;
+  const exp = Math.floor(Date.now() / 1000) + ttl;
+  const payload = Buffer.from(
+    JSON.stringify({
+      exp,
+      iss: "nr-agency-mcp",
+      ...(user && { email: user.email, role: user.role, name: user.name }),
+    })
+  ).toString("base64url");
   const sig = createHmac("sha256", SIGN_SECRET!).update(payload).digest("base64url");
-  return `${payload}.${sig}`;
+  return { accessToken: `${payload}.${sig}`, expiresIn: ttl };
 }
 
-export function verifyToken(token: string): boolean {
-  if (!SIGN_SECRET) return false;
+export function verifyToken(token: string): TokenPayload | null {
+  if (!SIGN_SECRET) return null;
   const [payload, sig] = token.split(".");
-  if (!payload || !sig) return false;
+  if (!payload || !sig) return null;
 
   const expected = createHmac("sha256", SIGN_SECRET).update(payload).digest("base64url");
-  if (sig !== expected) return false;
+  if (sig !== expected) return null;
 
   try {
     const data = JSON.parse(Buffer.from(payload, "base64url").toString());
-    return data.exp > Math.floor(Date.now() / 1000);
+    if (data.exp <= Math.floor(Date.now() / 1000)) return null;
+    return data as TokenPayload;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -93,6 +116,9 @@ function verifyAuthCode(code: string): {
   ccm: string;  // code_challenge_method
   ru: string;   // redirect_uri
   cid: string;  // client_id
+  email?: string;  // user email (from OAuth flow)
+  role?: string;   // user role (from OAuth flow)
+  name?: string;   // user name (from OAuth flow)
 } | null {
   if (!SIGN_SECRET) return null;
   const parts = code.split(".");
@@ -121,12 +147,12 @@ function verifyPkce(codeVerifier: string, codeChallenge: string, method: string)
   return codeVerifier === codeChallenge;
 }
 
-function issueToken(res: VercelResponse) {
-  const accessToken = makeToken();
+function issueToken(res: VercelResponse, user?: TokenUser) {
+  const { accessToken, expiresIn } = makeToken(user);
   res.status(200).json({
     access_token: accessToken,
     token_type: "bearer",
-    expires_in: TOKEN_TTL,
+    expires_in: expiresIn,
   });
 }
 
@@ -189,7 +215,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    issueToken(res);
+    // Extract user info from auth code (if present — new OAuth flow includes it)
+    const user = codeData.email
+      ? { email: codeData.email, role: codeData.role || "viewer", name: codeData.name || "" }
+      : undefined;
+
+    issueToken(res, user);
     return;
   }
 

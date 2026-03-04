@@ -4,11 +4,9 @@
  * GET /authorize?response_type=code&client_id=...&redirect_uri=...
  *     &code_challenge=...&code_challenge_method=S256&state=...
  *
- * Issues a signed authorization code and redirects back to the client.
- * The code encodes the PKCE challenge so the token endpoint can verify
- * it statelessly (no database needed).
- *
- * For internal agency use — auto-approves without a consent screen.
+ * Instead of auto-approving, redirects to Supabase Google OAuth.
+ * After successful Google login, the user is redirected through
+ * /api/auth/callback → /api/auth/complete, which issues the MCP auth code.
  */
 
 import type { VercelRequest, VercelResponse } from "@vercel/node";
@@ -16,16 +14,23 @@ import { createHmac } from "crypto";
 
 const CLIENT_ID = process.env.OAUTH_CLIENT_ID;
 const SIGN_SECRET = process.env.OAUTH_SIGN_SECRET;
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const BASE_URL = "https://nr-agency-mcp.vercel.app";
 
-const CODE_TTL = 120; // 2 minutes
+const PENDING_TTL = 600; // 10 minutes — time to complete Google login
 
-function makeAuthCode(params: {
+/**
+ * Create a signed "pending" blob that preserves the MCP client's OAuth params
+ * through the Supabase/Google redirect chain.
+ */
+function makePendingBlob(params: {
   codeChallenge: string;
   codeChallengeMethod: string;
   redirectUri: string;
   clientId: string;
+  state: string;
 }): string {
-  const exp = Math.floor(Date.now() / 1000) + CODE_TTL;
+  const exp = Math.floor(Date.now() / 1000) + PENDING_TTL;
   const payload = Buffer.from(
     JSON.stringify({
       exp,
@@ -33,6 +38,7 @@ function makeAuthCode(params: {
       ccm: params.codeChallengeMethod,
       ru: params.redirectUri,
       cid: params.clientId,
+      st: params.state,
     })
   ).toString("base64url");
   const sig = createHmac("sha256", SIGN_SECRET!).update(payload).digest("base64url");
@@ -42,6 +48,11 @@ function makeAuthCode(params: {
 export default function handler(req: VercelRequest, res: VercelResponse) {
   if (!CLIENT_ID || !SIGN_SECRET) {
     res.status(500).json({ error: "server_error", error_description: "OAuth not configured" });
+    return;
+  }
+
+  if (!SUPABASE_URL) {
+    res.status(500).json({ error: "server_error", error_description: "SUPABASE_URL not configured" });
     return;
   }
 
@@ -73,18 +84,22 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  // Create signed authorization code (encodes PKCE params for stateless verification)
-  const code = makeAuthCode({
+  // Create signed pending blob with all MCP OAuth params
+  const pendingBlob = makePendingBlob({
     codeChallenge,
     codeChallengeMethod,
     redirectUri,
     clientId,
+    state,
   });
 
-  // Redirect back to Claude.ai with the authorization code
-  const redirectUrl = new URL(redirectUri);
-  redirectUrl.searchParams.set("code", code);
-  if (state) redirectUrl.searchParams.set("state", state);
+  // Build Supabase Google OAuth URL
+  const callbackUrl = `${BASE_URL}/api/auth/callback?pending=${encodeURIComponent(pendingBlob)}`;
 
-  res.redirect(302, redirectUrl.toString());
+  const authUrl = new URL(`${SUPABASE_URL}/auth/v1/authorize`);
+  authUrl.searchParams.set("provider", "google");
+  authUrl.searchParams.set("redirect_to", callbackUrl);
+
+  // Redirect to Google login via Supabase
+  res.redirect(302, authUrl.toString());
 }

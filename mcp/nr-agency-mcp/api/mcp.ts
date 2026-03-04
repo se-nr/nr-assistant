@@ -11,13 +11,18 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { createMcpServer } from "../src/server.js";
-import { verifyToken } from "./oauth/token.js";
+import { verifyToken, type TokenPayload } from "./oauth/token.js";
 
 const API_KEY = process.env.NR_API_KEY;
 
-function checkAuth(req: VercelRequest, res: VercelResponse): boolean {
+interface AuthResult {
+  authenticated: boolean;
+  user?: TokenPayload;
+}
+
+function checkAuth(req: VercelRequest, res: VercelResponse): AuthResult {
   // Dev mode: no auth if no keys configured
-  if (!API_KEY && !process.env.OAUTH_SIGN_SECRET) return true;
+  if (!API_KEY && !process.env.OAUTH_SIGN_SECRET) return { authenticated: true };
 
   const authHeader = req.headers["authorization"];
   if (!authHeader || typeof authHeader !== "string") {
@@ -26,23 +31,30 @@ function checkAuth(req: VercelRequest, res: VercelResponse): boolean {
       'Bearer resource_metadata="https://nr-agency-mcp.vercel.app/.well-known/oauth-protected-resource"'
     );
     res.status(401).json({ error: "Missing Authorization header. Use: Bearer <token>" });
-    return false;
+    return { authenticated: false };
   }
 
   const token = authHeader.replace(/^Bearer\s+/i, "");
 
-  // Accept static API key
-  if (API_KEY && token === API_KEY) return true;
+  // Accept static API key (no user context)
+  if (API_KEY && token === API_KEY) return { authenticated: true };
 
-  // Accept OAuth access_token
-  if (verifyToken(token)) return true;
+  // Accept OAuth access_token (with user context)
+  const payload = verifyToken(token);
+  if (payload) return { authenticated: true, user: payload };
 
   res.status(403).json({ error: "Invalid or expired token" });
-  return false;
+  return { authenticated: false };
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (!checkAuth(req, res)) return;
+  const auth = checkAuth(req, res);
+  if (!auth.authenticated) return;
+
+  // Log authenticated user (if OAuth token, not static API key)
+  if (auth.user?.email) {
+    console.log(`MCP request from ${auth.user.email} (${auth.user.role || "api-key"})`);
+  }
 
   // Health check
   if (req.method === "GET") {
