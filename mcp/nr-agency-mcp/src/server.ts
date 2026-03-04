@@ -2062,6 +2062,86 @@ export function createMcpServer(): McpServer {
   );
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // META API TOOLS (live queries against Meta Graph API)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // ─── Tool: get_meta_ad_accounts ───────────────────────────────────────────
+  // Lists all Meta ad accounts accessible by a client's access token.
+
+  server.tool(
+    "get_meta_ad_accounts",
+    "List alle Meta ad accounts som en klients access token har adgang til. Nyttigt til at se hvilke konti der er tilgængelige, og matche dem med klienter i systemet.",
+    {
+      client_name: z.string().describe("Klientnavn (fuzzy match) — bruger denne klients Meta access token"),
+    },
+    async ({ client_name }) => {
+      try {
+        const sb = getSupabase();
+        const client = await findClient(sb, client_name);
+        if (!client) return noClient(client_name);
+
+        // Get token
+        const { data: clientData } = await sb.from("clients").select("meta_access_token, meta_ad_account_id").eq("id", client.id).single();
+        if (!clientData?.meta_access_token) return err(`${client.name} har ingen Meta access token.`);
+
+        const token = clientData.meta_access_token;
+
+        // Fetch all ad accounts (paginate)
+        const accounts: any[] = [];
+        let url: string | null = `https://graph.facebook.com/v21.0/me/adaccounts?fields=id,name,account_status,currency,timezone_name,amount_spent&limit=100&access_token=${token}`;
+
+        while (url && accounts.length < 200) {
+          const resp: Response = await fetch(url);
+          const json: any = await resp.json();
+          if (json.error) return err(`Meta API: ${json.error.message}`);
+          accounts.push(...(json.data || []));
+          url = json.paging?.next || null;
+        }
+
+        if (!accounts.length) return text(`Ingen ad accounts fundet for ${client.name}'s token.`);
+
+        // Get all our clients to mark which are tracked
+        const { data: ourClients } = await sb.from("clients").select("meta_ad_account_id, name").eq("is_active", true);
+        const trackedAccounts = new Map<string, string>();
+        ourClients?.forEach(c => { if (c.meta_ad_account_id) trackedAccounts.set(c.meta_ad_account_id, c.name); });
+
+        const statusMap: Record<number, string> = { 1: "ACTIVE", 2: "DISABLED", 3: "UNSETTLED", 7: "PENDING_REVIEW", 8: "PENDING_SETTLEMENT", 9: "GRACE_PERIOD", 100: "PENDING_CLOSURE", 101: "CLOSED" };
+
+        const lines: string[] = [
+          `## Meta Ad Accounts (via ${client.name}'s token)\n`,
+          `| Konto | Status | Valuta | Lifetime spend | I system? |`,
+          `|-------|--------|--------|----------------|-----------|`,
+        ];
+
+        // Sort: tracked first, then by spend
+        const sorted = accounts.sort((a, b) => {
+          const aTracked = trackedAccounts.has(a.id) ? 1 : 0;
+          const bTracked = trackedAccounts.has(b.id) ? 1 : 0;
+          if (aTracked !== bTracked) return bTracked - aTracked;
+          return parseInt(b.amount_spent || "0") - parseInt(a.amount_spent || "0");
+        });
+
+        let trackedCount = 0;
+        for (const a of sorted) {
+          const status = statusMap[a.account_status] || String(a.account_status);
+          const spent = (parseInt(a.amount_spent || "0") / 100).toLocaleString("da-DK");
+          const isTracked = trackedAccounts.get(a.id);
+          if (isTracked) trackedCount++;
+          const trackLabel = isTracked ? `✓ ${isTracked}` : "–";
+          const name = (a.name || "–").length > 35 ? (a.name || "–").slice(0, 32) + "…" : (a.name || "–");
+          lines.push(`| ${name} (${a.id}) | ${status} | ${a.currency} | ${spent} ${a.currency} | ${trackLabel} |`);
+        }
+
+        lines.push(`\n**Total:** ${accounts.length} konti | **I systemet:** ${trackedCount} | **Ikke tracked:** ${accounts.length - trackedCount}`);
+
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(e.message);
+      }
+    }
+  );
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // ADVANCED ANALYTICS TOOLS (replaces Pipedream read-only tools)
   // ═══════════════════════════════════════════════════════════════════════════
 

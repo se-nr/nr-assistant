@@ -85,6 +85,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         "get_klaviyo_segments",
         "get_klaviyo_metrics",
         "get_klaviyo_health",
+        "get_meta_ad_accounts",
         "get_ad_insights",
         "get_daily_trend",
         "get_age_gender_breakdown",
