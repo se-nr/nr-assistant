@@ -3045,6 +3045,135 @@ ${script}
     }
   );
 
+  // ─── Tool: get_google_ad_accounts ─────────────────────────────────────────
+  // Lists all Google Ads customer accounts accessible via the shared MCC.
+
+  server.tool(
+    "get_google_ad_accounts",
+    "List alle Google Ads konti tilgængelige via MCC (Manager Account). Viser hvilke der allerede er forbundet til klienter i systemet. Bruges til at opdage nye konti der kan tilsluttes.",
+    {},
+    async () => {
+      try {
+        const data = await dashboardFetch<{
+          accounts: Array<{
+            customer_id: string;
+            name: string;
+            currency_code: string;
+            already_connected: boolean;
+            connected_client_name?: string;
+          }>;
+        }>("/api/connectors/google-ads/discover");
+
+        const accounts = data.accounts || [];
+        if (!accounts.length) return text("Ingen Google Ads konti fundet under MCC. Tjek at GOOGLE_ADS_MCC_ID og GOOGLE_ADS_REFRESH_TOKEN er sat korrekt.");
+
+        // Group by name similarity for display
+        const lines: string[] = [
+          `## Google Ads konti (via MCC)\n`,
+          `| Konto | Customer ID | Valuta | Forbundet? |`,
+          `|-------|-------------|--------|------------|`,
+        ];
+
+        // Sort: connected first, then alphabetically
+        const sorted = accounts.sort((a, b) => {
+          if (a.already_connected !== b.already_connected) return a.already_connected ? -1 : 1;
+          return a.name.localeCompare(b.name);
+        });
+
+        let connectedCount = 0;
+        for (const a of sorted) {
+          if (a.already_connected) connectedCount++;
+          const status = a.already_connected
+            ? `✓ ${a.connected_client_name || "Tilsluttet"}`
+            : "–";
+          lines.push(`| ${a.name} | ${a.customer_id} | ${a.currency_code} | ${status} |`);
+        }
+
+        lines.push(`\n**Total:** ${accounts.length} konti | **Forbundet:** ${connectedCount} | **Ikke forbundet:** ${accounts.length - connectedCount}`);
+
+        if (accounts.length - connectedCount > 0) {
+          lines.push(`\n**Tip:** Brug \`connect_google_ads\` for at forbinde en konto til en klient.`);
+          lines.push(`Bemærk: Konti med lignende navne (f.eks. "Spring Copenhagen DK" og "Spring Copenhagen Int") kan tilhøre samme kunde — spørg om de skal oprettes som én eller flere klienter.`);
+        }
+
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(`Google Ads discover: ${e.message}`);
+      }
+    }
+  );
+
+  // ─── Tool: connect_google_ads ───────────────────────────────────────────────
+  // Connects a Google Ads customer account to a client via data_sources.
+
+  server.tool(
+    "connect_google_ads",
+    "Forbind en Google Ads konto til en klient. Indsætter i data_sources-tabellen. Klienten skal eksistere i forvejen (opret med create_client hvis nødvendigt). Spørg altid om bekræftelse — Google Ads kontonavne kan ligne hinanden.",
+    {
+      client_name: z.string().describe("Klientens navn (fuzzy match) — skal eksistere i systemet"),
+      customer_id: z.string().describe("Google Ads Customer ID (f.eks. '123-456-7890') — fra get_google_ad_accounts"),
+      display_name: z.string().optional().describe("Visningsnavn (f.eks. 'Google Ads — DK'). Standard: 'Google Ads'"),
+    },
+    async ({ client_name, customer_id, display_name }) => {
+      try {
+        const sb = getSupabase();
+        const client = await findClient(sb, client_name);
+        if (!client) return noClient(client_name);
+
+        // Normalize customer_id (remove dashes for storage check, keep for display)
+        const normalizedId = customer_id.replace(/-/g, "");
+        const formattedId = customer_id.includes("-")
+          ? customer_id
+          : `${normalizedId.slice(0, 3)}-${normalizedId.slice(3, 6)}-${normalizedId.slice(6)}`;
+
+        // Check if already connected
+        const { data: existing } = await sb
+          .from("data_sources")
+          .select("id, client_id")
+          .eq("source_type", "google_ads")
+          .like("config->>customer_id", `%${normalizedId}%`)
+          .limit(5);
+
+        if (existing?.length) {
+          // Check if it's connected to this client or another
+          const connectedToThis = existing.find(ds => ds.client_id === client.id);
+          if (connectedToThis) {
+            return err(`Google Ads ${formattedId} er allerede forbundet til ${client.name}.`);
+          }
+          return err(`Google Ads ${formattedId} er allerede forbundet til en anden klient. Tjek data_sources.`);
+        }
+
+        // Insert data_source
+        const { data: newDs, error } = await sb.from("data_sources").insert({
+          client_id: client.id,
+          source_type: "google_ads",
+          display_name: display_name || "Google Ads",
+          config: { customer_id: formattedId },
+          is_active: true,
+        }).select("id, display_name").single();
+
+        if (error) return err(`Kunne ikke oprette data source: ${error.message}`);
+
+        const lines = [
+          `## Google Ads forbundet\n`,
+          `| Felt | Værdi |`,
+          `|------|-------|`,
+          `| Klient | ${client.name} |`,
+          `| Customer ID | ${formattedId} |`,
+          `| Display name | ${newDs.display_name} |`,
+          `| Data source ID | ${newDs.id} |`,
+          ``,
+          `**Næste skridt:** Google Ads synkroniserer automatisk ved næste daglige cron (kl. 05:00 UTC).`,
+          `For at starte sync nu, trigger den manuelt fra dashboardet eller vent til næste planlagte kørsel.`,
+        ];
+
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(e.message);
+      }
+    }
+  );
+
   return server;
 }
 
