@@ -95,6 +95,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         "get_ad_image",
         "setup_assistant",
         "update_assistant",
+        "create_client",
+        "trigger_backfill",
       ],
     });
     return;

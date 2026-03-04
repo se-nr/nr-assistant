@@ -2907,6 +2907,144 @@ ${script}
     }
   );
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CLIENT MANAGEMENT TOOLS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // ─── Tool: create_client ──────────────────────────────────────────────────
+  // Creates a new client in the dashboard (Supabase clients table).
+
+  server.tool(
+    "create_client",
+    "Opret en ny klient i dashboardet. Kopierer Meta access token fra en eksisterende klient (da flere konti deler samme token). Bruges typisk efter get_meta_ad_accounts viser en utracked konto.",
+    {
+      name: z.string().describe("Klientens navn (f.eks. 'Won Hundred', 'Gastrotools DK')"),
+      meta_ad_account_id: z.string().describe("Meta ad account ID (f.eks. 'act_123456789') — fra get_meta_ad_accounts"),
+      token_from_client: z.string().describe("Navn på eksisterende klient hvis Meta access token skal kopieres (fuzzy match)"),
+      currency: z.string().default("DKK").describe("Valutakode (DKK, EUR, SEK, NOK, USD)"),
+      timezone: z.string().default("Europe/Copenhagen").describe("Tidszone (f.eks. 'Europe/Copenhagen', 'Europe/Berlin')"),
+    },
+    async ({ name, meta_ad_account_id, token_from_client, currency, timezone }) => {
+      try {
+        const sb = getSupabase();
+
+        // Generate slug from name (kebab-case)
+        const slug = name
+          .toLowerCase()
+          .replace(/[æå]/g, "a").replace(/ø/g, "o").replace(/ü/g, "u").replace(/ö/g, "o").replace(/ä/g, "a")
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "");
+
+        // Check slug isn't taken
+        const { data: existing } = await sb.from("clients").select("id").eq("slug", slug).limit(1);
+        if (existing?.length) return err(`Slug "${slug}" er allerede i brug. Vælg et andet navn.`);
+
+        // Check ad account isn't already tracked
+        const { data: existingAcc } = await sb.from("clients").select("id, name").eq("meta_ad_account_id", meta_ad_account_id).limit(1);
+        if (existingAcc?.length) return err(`Ad account ${meta_ad_account_id} er allerede tracked under "${existingAcc[0].name}".`);
+
+        // Get token from source client
+        const sourceClient = await findClient(sb, token_from_client);
+        if (!sourceClient) return err(`Kilde-klient "${token_from_client}" ikke fundet — kan ikke kopiere access token.`);
+
+        const { data: sourceData } = await sb.from("clients").select("meta_access_token").eq("id", sourceClient.id).single();
+        if (!sourceData?.meta_access_token) return err(`${sourceClient.name} har ingen Meta access token at kopiere.`);
+
+        // Insert new client
+        const { data: newClient, error } = await sb.from("clients").insert({
+          name,
+          slug,
+          meta_ad_account_id,
+          meta_access_token: sourceData.meta_access_token,
+          currency,
+          timezone,
+          is_active: true,
+        }).select("id, name, slug").single();
+
+        if (error) return err(`Kunne ikke oprette klient: ${error.message}`);
+
+        const lines = [
+          `## Klient oprettet\n`,
+          `| Felt | Værdi |`,
+          `|------|-------|`,
+          `| Navn | ${newClient.name} |`,
+          `| ID | ${newClient.id} |`,
+          `| Slug | ${newClient.slug} |`,
+          `| Ad Account | ${meta_ad_account_id} |`,
+          `| Token fra | ${sourceClient.name} |`,
+          `| Valuta | ${currency} |`,
+          `| Tidszone | ${timezone} |`,
+          ``,
+          `**Næste skridt:** Kør \`trigger_backfill\` med klient "${name}" for at starte historisk sync (2 år, ca. 30-45 min).`,
+        ];
+
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(e.message);
+      }
+    }
+  );
+
+  // ─── Tool: trigger_backfill ─────────────────────────────────────────────────
+  // Triggers a historical backfill sync via the dashboard's Inngest endpoint.
+
+  server.tool(
+    "trigger_backfill",
+    "Start historisk Meta Ads backfill-sync via dashboardets Inngest-funktion. Standard: 2 år (730 dage). Synkroniserer insights, campaigns, ads, creatives, demographics, placements. Tager ca. 30-45 min for 2 år.",
+    {
+      client_name: z.string().describe("Klientnavn (fuzzy match)"),
+      days_back: z.number().min(1).max(730).default(730).describe("Antal dage tilbage (max 730 = 2 år). Standard: 730"),
+    },
+    async ({ client_name, days_back }) => {
+      try {
+        const dashboardUrl = process.env.DASHBOARD_URL;
+        if (!dashboardUrl) return err("DASHBOARD_URL env var ikke sat — kan ikke trigge backfill.");
+
+        const sb = getSupabase();
+        const client = await findClient(sb, client_name);
+        if (!client) return noClient(client_name);
+
+        // Verify client has an ad account
+        const { data: clientData } = await sb.from("clients").select("meta_ad_account_id, meta_access_token").eq("id", client.id).single();
+        if (!clientData?.meta_ad_account_id) return err(`${client.name} har ingen Meta ad account ID. Opret klienten med create_client først.`);
+        if (!clientData?.meta_access_token) return err(`${client.name} har ingen Meta access token.`);
+
+        // Call dashboard background sync endpoint
+        const resp = await fetch(`${dashboardUrl}/api/sync/background`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clientId: client.id, daysBack: days_back }),
+        });
+
+        if (!resp.ok) {
+          const body = await resp.text().catch(() => "");
+          return err(`Backfill fejlede: ${resp.status} ${resp.statusText}${body ? ` — ${body}` : ""}`);
+        }
+
+        const years = (days_back / 365).toFixed(1);
+        const estimatedTime = days_back >= 365 ? "30-45 minutter" : days_back >= 180 ? "15-25 minutter" : "5-15 minutter";
+
+        const lines = [
+          `## Backfill startet for ${client.name}\n`,
+          `| Parameter | Værdi |`,
+          `|-----------|-------|`,
+          `| Klient | ${client.name} |`,
+          `| Ad Account | ${clientData.meta_ad_account_id} |`,
+          `| Dage tilbage | ${days_back} (~${years} år) |`,
+          `| Estimeret tid | ${estimatedTime} |`,
+          ``,
+          `Synkroniserer: insights, campaigns, ads, creatives, demographics, placements, hourly data.`,
+          ``,
+          `Sync kører i baggrunden via Inngest. Tjek status i dashboardet eller kør \`get_performance\` / \`get_ad_insights\` om ${estimatedTime} for at verificere data.`,
+        ];
+
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(e.message);
+      }
+    }
+  );
+
   return server;
 }
 
