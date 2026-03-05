@@ -6,8 +6,8 @@ eller designer alt hvad de behøver for at producere annoncerne – uden at skul
 </purpose>
 
 <required_reading>
-@~/agency-context/agency/process.md
-@~/agency-context/agency/templates/creative-brief.md
+@~/.claude/nr-assistant/knowledge/process.md
+@~/.claude/nr-assistant/knowledge/templates/creative-brief.md
 </required_reading>
 
 <philosophy>

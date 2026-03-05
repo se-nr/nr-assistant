@@ -6,8 +6,8 @@ Output: rapport i Isidors standard-format.
 </purpose>
 
 <required_reading>
-@~/agency-context/agency/process.md
-@~/agency-context/agency/benchmarks.md
+@~/.claude/nr-assistant/knowledge/process.md
+@~/.claude/nr-assistant/knowledge/benchmarks.md
 </required_reading>
 
 <philosophy>
@@ -24,7 +24,7 @@ Spørg:
 2. Hvad er perioden / hvad analyserer vi? (kampagne, periode, kanal?)
 3. Hvad er det spørgsmål analysen skal besvare?
 
-Load klient-kontekst: `@~/agency-context/clients/[klient]/overview.md`
+Load klient-kontekst: `@~/.claude/nr-assistant/clients/[klient]/overview.md`
 Tjek om der er klient-specifikke benchmarks i `history.md`.
 
 ## Trin 2: Data-input

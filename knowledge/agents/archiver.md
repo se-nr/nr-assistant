@@ -33,7 +33,7 @@ Laes filen paa `output_path` og ekstraher:
 - **Handlingsplan** — prioriterede naeste skridt
 
 ### 2. Opdater history.md
-Tilfoej ny entry til `~/agency-context/clients/[klient]/history.md`:
+Tilfoej ny entry til `~/.claude/nr-assistant/clients/[klient]/history.md`:
 
 ```markdown
 ## [YYYY-MM-DD] — [Skill-type]: [kort beskrivelse]
@@ -46,7 +46,7 @@ Tilfoej ny entry til `~/agency-context/clients/[klient]/history.md`:
 ```
 
 ### 3. Opdater overview.md (kun hvis relevant)
-Opdater KUN disse felter i `~/agency-context/clients/[klient]/overview.md`:
+Opdater KUN disse felter i `~/.claude/nr-assistant/clients/[klient]/overview.md`:
 - **Targets** — hvis nye KPI-targets er sat
 - **Kanaler** — hvis nye kanaler er tilfojet
 - **Budget** — hvis budget er aendret
@@ -55,7 +55,7 @@ Opdater KUN disse felter i `~/agency-context/clients/[klient]/overview.md`:
 ALDRIG overskrive eksisterende brand-info, TOV eller kontakt-data.
 
 ### 4. Opdater phases/current.md
-Opret eller opdater `~/agency-context/clients/[klient]/phases/current.md`:
+Opret eller opdater `~/.claude/nr-assistant/clients/[klient]/phases/current.md`:
 
 ```markdown
 # [Klient] — Aktuel Status

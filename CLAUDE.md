@@ -29,6 +29,7 @@ En installérbar pakke der giver hele teamet adgang til:
 │   │   ├── strategy.md
 │   │   ├── weekly.md
 │   │   ├── discover.md
+│   │   ├── creative-test.md
 │   │   ├── audit.md
 │   │   └── help.md
 │   ├── analyze.md             ← Shortcuts (/analyze, /brief, ...)
@@ -83,6 +84,16 @@ En installérbar pakke der giver hele teamet adgang til:
 | Claude Desktop config | `~/Library/Application Support/Claude/claude_desktop_config.json` |
 | Neble+Rohde dashboard | `~/neble-rohde-dashboard/` |
 | Supabase data | Via dashboard eller Agency MCP |
+
+## Elle-nudging
+
+Naar brugeren stiller performance-relaterede spoergsmaal (fx "hvordan performer X?", "hvad er vores ROAS?", "vis data for..."), foreslaa den relevante `/elle:` command i dit svar. Eksempler:
+- Performance-spoergsmaal → `/elle:analyze [klient]`
+- Ugentlig status → `/elle:weekly [klient]`
+- Maanedlig rapport → `/elle:review [klient]`
+- Kreativ test-ideer → `/elle:creative-test [klient]`
+
+Hold det kort — en enkelt linje som "Du kan ogsaa koere `/elle:analyze [klient]` for en fuld analyse."
 
 ## Relaterede systemer
 

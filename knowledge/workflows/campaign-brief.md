@@ -5,8 +5,8 @@ Guided kampagne-brief skabelse. Output: udfyldt campaign-brief template klar til
 </purpose>
 
 <required_reading>
-@~/agency-context/agency/process.md
-@~/agency-context/agency/templates/campaign-brief.md
+@~/.claude/nr-assistant/knowledge/process.md
+@~/.claude/nr-assistant/knowledge/templates/campaign-brief.md
 </required_reading>
 
 <philosophy>
@@ -21,7 +21,7 @@ Claude hjælper med at afdække det der ikke er sagt endnu.
 
 Spørg:
 1. Hvilken klient?
-2. Er der en overview.md for denne klient? Hvis ja, load den: `@~/agency-context/clients/[klient]/overview.md`
+2. Er der en overview.md for denne klient? Hvis ja, load den: `@~/.claude/nr-assistant/clients/[klient]/overview.md`
 3. Hvad er anledningen til brieffet? (ny kampagne, promo, sæson, test?)
 
 ## Trin 2: Mål og succeskriterium
@@ -72,7 +72,7 @@ Juster baseret på feedback. Gentag indtil godkendt.
 
 ## Trin 8: Gem
 
-Gem som `~/agency-context/clients/[klient]/brief-[YYYY-MM-DD]-[kort-navn].md`
+Gem som `~/.claude/nr-assistant/clients/[klient]/brief-[YYYY-MM-DD]-[kort-navn].md`
 
 </process>
 

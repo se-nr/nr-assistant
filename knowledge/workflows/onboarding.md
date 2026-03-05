@@ -5,8 +5,8 @@ Guided onboarding af ny klient. Output: udfyldt clients/[navn]/overview.md klar 
 </purpose>
 
 <required_reading>
-@~/agency-context/agency/process.md
-@~/agency-context/clients/_template.md
+@~/.claude/nr-assistant/knowledge/process.md
+@~/.claude/nr-assistant/clients/_template.md
 </required_reading>
 
 <philosophy>
@@ -67,7 +67,7 @@ Juster baseret på feedback.
 
 ## Trin 6: Gem filen
 
-Gem den udfyldte klient-profil som `~/agency-context/clients/[klient-navn]/overview.md`.
+Gem den udfyldte klient-profil som `~/.claude/nr-assistant/clients/[klient-navn]/overview.md`.
 
 Opret også disse tomme placeholder-filer:
 

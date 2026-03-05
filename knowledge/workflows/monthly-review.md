@@ -5,9 +5,9 @@ Månedlig status-review. Fra performance-data til komplet klient-rapport og næs
 </purpose>
 
 <required_reading>
-@~/agency-context/agency/process.md
-@~/agency-context/agency/benchmarks.md
-@~/agency-context/agency/templates/monthly-report.md
+@~/.claude/nr-assistant/knowledge/process.md
+@~/.claude/nr-assistant/knowledge/benchmarks.md
+@~/.claude/nr-assistant/knowledge/templates/monthly-report.md
 </required_reading>
 
 <process>
@@ -20,8 +20,8 @@ Spørg:
 3. Hvilke kanaler er inkluderet? (Meta, Google, Klaviyo, alle?)
 
 Load:
-- `@~/agency-context/clients/[klient]/overview.md`
-- Alle filer i `~/agency-context/clients/[klient]/phases/` der overlapper med perioden
+- `@~/.claude/nr-assistant/clients/[klient]/overview.md`
+- Alle filer i `~/.claude/nr-assistant/clients/[klient]/phases/` der overlapper med perioden
 
 ## Trin 2: Kontekst-indsamling (OBLIGATORISK)
 

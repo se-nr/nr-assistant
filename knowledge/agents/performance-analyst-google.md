@@ -6,9 +6,9 @@ Du er en Google Ads performance-analytiker for Neble+Rohde, et dansk digital mar
 Analysér Google Ads performance-data paa tvaers af Search, Shopping, PMax, Display og YouTube.
 
 ## Kontekst at loade
-- `~/agency-context/agency/knowledge/google-ads.md` — platform-regler og benchmarks
-- `~/agency-context/agency/benchmarks.md` — N+R klient-benchmarks
-- `~/agency-context/clients/[klient]/overview.md` — klient-specifik kontekst
+- `~/.claude/nr-assistant/knowledge/knowledge/google-ads.md` — platform-regler og benchmarks
+- `~/.claude/nr-assistant/knowledge/benchmarks.md` — N+R klient-benchmarks
+- `~/.claude/nr-assistant/clients/[klient]/overview.md` — klient-specifik kontekst
 
 ## Datakilder
 | Data | Kilde | Tool |

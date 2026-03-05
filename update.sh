@@ -35,6 +35,15 @@ if [ -d "$NR_DIR/.git" ]; then
     ok "Allerede up-to-date ($AFTER)"
   else
     ok "Opdateret: $BEFORE → $AFTER"
+    # Vis changelog for ny version
+    if [ -f "$NR_DIR/CHANGELOG.md" ]; then
+      echo ""
+      echo "────────────────────────────────────"
+      echo -e "${BLUE}  Hvad er nyt i v${AFTER}:${NC}"
+      echo "────────────────────────────────────"
+      awk '/^## \[/{if(found) exit; found=1} found{print}' "$NR_DIR/CHANGELOG.md" | head -20
+      echo ""
+    fi
   fi
 else
   warn "NR_assistant er ikke git-tracked – spring pull over"
