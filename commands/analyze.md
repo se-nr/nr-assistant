@@ -5,7 +5,7 @@ shortcut: analyze
 
 # Performance Analyse
 
-Kør `/elle-analyze` skill med det angivne klient-navn.
+Kør `/elle:analyze` skill med det angivne klient-navn.
 
 ## Workflow
 1. Indlæs klient-kontekst + historik

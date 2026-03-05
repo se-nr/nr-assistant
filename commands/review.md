@@ -5,7 +5,7 @@ shortcut: review
 
 # Månedlig Review
 
-Kør `/elle-review` skill med klient-navn og måned.
+Kør `/elle:review` skill med klient-navn og måned.
 
 ## Workflow
 1. Indlæs klient-kontekst, historik og benchmarks

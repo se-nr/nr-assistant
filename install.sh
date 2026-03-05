@@ -1,14 +1,14 @@
 #!/bin/bash
 # NR_assistant installer — Elle
-# Installerer alle skills, kontekst-links og MCP-konfiguration på én gang.
+# Installerer alle commands, kontekst-links og MCP-konfiguration på én gang.
 # Kør: bash ~/.claude/nr-assistant/install.sh
 
 set -e
 
 NR_DIR="$HOME/.claude/nr-assistant"
+COMMANDS_DIR="$HOME/.claude/commands/elle"
 SKILLS_DIR="$HOME/.claude/skills"
 CLAUDE_DESKTOP_CONFIG="$HOME/Library/Application Support/Claude/claude_desktop_config.json"
-CONTEXT_DIR="$HOME/agency-context"
 NOTEBOOKLM_DIR="$SKILLS_DIR/notebooklm"
 
 GREEN='\033[0;32m'
@@ -31,35 +31,47 @@ echo ""
 VERSION=$(cat "$NR_DIR/VERSION" 2>/dev/null || echo "unknown")
 info "Version: $VERSION"
 
-# ─── 1. Skills (plugin format: skills/[name]/SKILL.md) ───────────────────────
-step "1/4  Elle skills"
+# ─── 1. Elle commands (commands/elle/[name].md → /elle:[name]) ────────────────
+step "1/4  Elle commands"
 
-mkdir -p "$SKILLS_DIR"
-SKILLS=(
-  "elle-onboard"
-  "elle-brief"
-  "elle-creative"
-  "elle-analyze"
-  "elle-review"
-  "elle-research"
-  "elle-strategy"
-  "elle-weekly"
-  "elle-discover"
-  "elle-audit"
-  "elle-help"
+mkdir -p "$COMMANDS_DIR"
+COMMANDS=(
+  "onboard"
+  "brief"
+  "creative"
+  "analyze"
+  "review"
+  "research"
+  "strategy"
+  "weekly"
+  "discover"
+  "audit"
+  "help"
 )
 
-for skill in "${SKILLS[@]}"; do
-  src_dir="$NR_DIR/skills/$skill"
-  dst_dir="$SKILLS_DIR/$skill"
-  if [ -f "$src_dir/SKILL.md" ]; then
-    mkdir -p "$dst_dir"
-    cp "$src_dir/SKILL.md" "$dst_dir/SKILL.md"
-    ok "$skill/SKILL.md"
+for cmd in "${COMMANDS[@]}"; do
+  src="$NR_DIR/commands/elle/${cmd}.md"
+  dst="$COMMANDS_DIR/${cmd}.md"
+  if [ -f "$src" ]; then
+    cp "$src" "$dst"
+    ok "/elle:${cmd}"
   else
-    warn "$skill/SKILL.md – ikke fundet i package (spring over)"
+    warn "/elle:${cmd} – ikke fundet i package (spring over)"
   fi
 done
+
+# Ryd op i gamle skills-format (elle-* i skills/)
+OLD_SKILLS_CLEANED=0
+for old_skill in "$SKILLS_DIR"/elle-*/SKILL.md; do
+  if [ -f "$old_skill" ]; then
+    old_dir=$(dirname "$old_skill")
+    rm -rf "$old_dir"
+    OLD_SKILLS_CLEANED=$((OLD_SKILLS_CLEANED + 1))
+  fi
+done
+if [ $OLD_SKILLS_CLEANED -gt 0 ]; then
+  info "Ryddet op: $OLD_SKILLS_CLEANED gamle elle-* skills fjernet fra skills/"
+fi
 
 # ─── 2. NotebookLM skill ──────────────────────────────────────────────────────
 step "2/4  NotebookLM skill"
@@ -103,15 +115,20 @@ fi
 
 python3 "$NR_DIR/scripts/update_mcp_config.py" "$CLAUDE_DESKTOP_CONFIG" "$MCP_ENTRIES_RESOLVED"
 
-# ─── 4. agency-context ────────────────────────────────────────────────────────
-step "4/4  Klient kontekst-database"
+# ─── 4. Shortcut commands ─────────────────────────────────────────────────────
+step "4/4  Shortcut commands"
 
-if [ -d "$CONTEXT_DIR/.git" ]; then
-  ok "Klient-database fundet (~/agency-context)"
-elif [ -d "$CONTEXT_DIR" ]; then
-  ok "Klient-database fundet (~/agency-context)"
-else
-  info "Klient-database (~/agency-context) sættes op separat — spørg admin"
+SHORTCUT_DIR="$HOME/.claude/commands"
+SHORTCUT_SRC="$NR_DIR/commands"
+SHORTCUTS_INSTALLED=0
+for shortcut in "$SHORTCUT_SRC"/*.md; do
+  if [ -f "$shortcut" ]; then
+    cp "$shortcut" "$SHORTCUT_DIR/$(basename "$shortcut")"
+    SHORTCUTS_INSTALLED=$((SHORTCUTS_INSTALLED + 1))
+  fi
+done
+if [ $SHORTCUTS_INSTALLED -gt 0 ]; then
+  ok "$SHORTCUTS_INSTALLED shortcut commands installeret (/analyze, /brief, ...)"
 fi
 
 # ─── Opsummering ──────────────────────────────────────────────────────────────
@@ -128,16 +145,11 @@ echo "  2. NotebookLM auth (første gang, kræver Chrome + Google-login):"
 echo "     cd ~/.claude/skills/notebooklm"
 echo "     python scripts/run.py auth_manager.py setup"
 echo ""
-echo "  3. N+R Agency MCP (deployes én gang af admin til Vercel):"
-echo "     Se ~/.claude/nr-assistant/mcp/nr-agency-mcp/README.md"
-echo ""
-echo "  4. Tilgængelige skills i Claude Code:"
-for skill in "${SKILLS[@]}"; do
-  cmd="/${skill}"
-  echo "     $cmd"
+echo "  3. Tilgængelige Elle commands:"
+for cmd in "${COMMANDS[@]}"; do
+  echo "     /elle:${cmd}"
 done
-echo "     /notebooklm (query, list, search)"
 echo ""
-echo "  5. Slash commands (shortcuts):"
+echo "  4. Shortcuts (genveje):"
 echo "     /onboard, /brief, /creative, /analyze, /review, /research, /strategy"
 echo ""

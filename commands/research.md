@@ -5,7 +5,7 @@ shortcut: research
 
 # Research
 
-Kør `/elle-research` skill med det angivne klient-navn.
+Kør `/elle:research` skill med det angivne klient-navn.
 
 ## Workflow
 1. Indlæs klient-kontekst

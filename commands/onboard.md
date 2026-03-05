@@ -5,7 +5,7 @@ shortcut: onboard
 
 # Onboard Klient
 
-Kør `/elle-onboard` skill med det angivne klient-navn.
+Kør `/elle:onboard` skill med det angivne klient-navn.
 
 ## Workflow
 1. Indlæs agency-context templates
