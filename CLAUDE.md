@@ -1,11 +1,11 @@
 # NR_assistant – Admin-guide til Claude Code
 
-Du arbejder i NR_assistant-pakken. Dette er Neble+Rohde's agentur-workflow system.
+Du arbejder i NR_assistant-pakken. Dette er Neble+Rohde's workflow system "Elle".
 
 ## Hvad er dette?
 
 En installérbar pakke der giver hele teamet adgang til:
-- **Agency skills** (`/agency:*`) – onboarding, brief, kreativ, analyse, review, research
+- **Elle skills** (`/elle:*`) – onboarding, brief, kreativ, analyse, review, research
 - **NotebookLM MCP** – automatisk kildegrounded research via Google NotebookLM
 - **N+R Agency MCP** – performance data fra Supabase + klientkontekst fra Google Drive
 - **Agency kontekst** (`~/agency-context/`) – klient-database, workflows, templates
@@ -18,13 +18,18 @@ En installérbar pakke der giver hele teamet adgang til:
 ├── install.sh                 ← Installér alt på én maskine
 ├── update.sh                  ← Opdater og re-deploy
 ├── CLAUDE.md                  ← Du er her
-├── skills/                    ← Canonical source for alle agency skills
-│   ├── agency-onboard.md
-│   ├── agency-brief.md
-│   ├── agency-creative.md
-│   ├── agency-analyze.md
-│   ├── agency-review.md
-│   └── agency-research.md
+├── skills/                    ← Canonical source for alle Elle skills
+│   ├── elle-onboard/SKILL.md
+│   ├── elle-brief/SKILL.md
+│   ├── elle-creative/SKILL.md
+│   ├── elle-analyze/SKILL.md
+│   ├── elle-review/SKILL.md
+│   ├── elle-research/SKILL.md
+│   ├── elle-strategy/SKILL.md
+│   ├── elle-weekly/SKILL.md
+│   ├── elle-discover/SKILL.md
+│   ├── elle-audit/SKILL.md
+│   └── elle-help/SKILL.md
 ├── mcp/
 │   ├── notebooklm/            ← MCP wrapper til NotebookLM skill
 │   │   ├── mcp_server.py
@@ -42,14 +47,14 @@ En installérbar pakke der giver hele teamet adgang til:
 ## Admin-workflows
 
 ### Opdater en skill
-1. Redigér filen i `skills/agency-[navn].md`
-2. Test med `/agency:[navn]` i Claude Code
+1. Redigér filen i `skills/elle-[navn]/SKILL.md`
+2. Test med `/elle:[navn]` i Claude Code
 3. Commit: `git add skills/ && git commit -m "feat(skill): ..."`
 4. Push: `git push`
 5. Teamet kører `./update.sh` for at få opdateringen
 
 ### Tilføj ny skill
-1. Opret `skills/agency-[ny].md` med korrekt frontmatter
+1. Opret `skills/elle-[ny]/SKILL.md` med korrekt frontmatter
 2. Tilføj til `SKILLS`-arrayet i `install.sh`
 3. Test, commit, push
 
@@ -62,7 +67,7 @@ En installérbar pakke der giver hele teamet adgang til:
 ### Tilføj ny klient
 1. Opret `~/agency-context/clients/[klient]/`
 2. Kopier `~/agency-context/clients/_template.md` → `overview.md`
-3. Kør `/agency:onboard [klient]` for guided onboarding
+3. Kør `/elle:onboard [klient]` for guided onboarding
 4. Push til agency-context GitHub
 
 ## Vigtige stier

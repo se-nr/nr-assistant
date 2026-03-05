@@ -5,7 +5,7 @@ shortcut: creative
 
 # Creative Copy
 
-Kør `/agency-creative` skill med det angivne klient-navn.
+Kør `/elle-creative` skill med det angivne klient-navn.
 
 ## Workflow
 1. Indlæs klient-kontekst + seneste brief

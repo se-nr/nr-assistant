@@ -1,16 +1,16 @@
 ---
-name: agency-help
+name: elle-help
 description: |
-  Vis tilgængelige agency-kommandoer og eksempel-prompts.
-  Brug til at komme i gang med N+R Agency MCP tools og skills.
-  Trigger: "agency help", "hvad kan du", "kom i gang"
+  Vis tilgængelige Elle-kommandoer og eksempel-prompts.
+  Brug til at komme i gang med Elle skills og N+R MCP tools.
+  Trigger: "elle help", "hvad kan du", "kom i gang"
 allowed-tools: Read
 version: 1.0.0
 author: Neble+Rohde <isidor@neble-rohde.dk>
 ---
 
 <objective>
-Display the complete N+R Agency command reference and getting-started guide.
+Display the complete Elle command reference and getting-started guide.
 
 Output ONLY the reference content below. Do NOT add:
 - Project-specific analysis
@@ -20,10 +20,10 @@ Output ONLY the reference content below. Do NOT add:
 </objective>
 
 <execution_context>
-@~/.claude/nr-assistant/guides/agency-help.md
+@~/.claude/nr-assistant/guides/elle-help.md
 </execution_context>
 
 <process>
-Output the complete agency help guide from @~/.claude/nr-assistant/guides/agency-help.md.
+Output the complete elle help guide from @~/.claude/nr-assistant/guides/elle-help.md.
 Display the reference content directly — no additions or modifications.
 </process>

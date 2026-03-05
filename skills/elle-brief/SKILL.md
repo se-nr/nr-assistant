@@ -1,5 +1,5 @@
 ---
-name: agency-brief
+name: elle-brief
 description: |
   Lav et kampagne-brief med guided spørgsmål. Output: udfyldt brief template.
   Brug til at oprette kampagne-briefs for klienter.
@@ -10,7 +10,7 @@ version: 1.1.0
 author: Neble+Rohde <isidor@neble-rohde.dk>
 ---
 
-# Agency Brief
+# Elle Brief
 
 Guided kampagne-brief oprettelse med copywriting knowledge.
 
@@ -30,7 +30,7 @@ Hvis et klient-navn er angivet som argument:
 2. Brug klient-konteksten til at informere briefet
 3. **Research-check**: Tjek om `~/agency-context/clients/[klient]/context/research-sources.md` eksisterer.
    Hvis den eksisterer: load den og brug research til at grunde briefet.
-   Hvis den IKKE eksisterer: nævn det for brugeren – "Der er ikke lavet research for denne klient endnu. Overvej at køre /agency:research først for bedre funderet brief."
+   Hvis den IKKE eksisterer: nævn det for brugeren – "Der er ikke lavet research for denne klient endnu. Overvej at køre /elle:research først for bedre funderet brief."
 
 Brug copywriting knowledge til at sikre:
 - Hooks matcher funnel-stadie (FP/IM/IP/EC)

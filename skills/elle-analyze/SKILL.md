@@ -1,5 +1,5 @@
 ---
-name: agency-analyze
+name: elle-analyze
 description: |
   Performance-analyse – fra rå data til indsigt og anbefaling.
   Brug til kampagne-analyse, attribution-sammenligning og performance-reviews.
@@ -10,7 +10,7 @@ version: 1.1.0
 author: Neble+Rohde <isidor@neble-rohde.dk>
 ---
 
-# Agency Analyze
+# Elle Analyze
 
 Performance-analyse workflow med agent-spawning og auto-arkivering.
 
@@ -47,7 +47,7 @@ Levér: Executive summary, nøgletalstabel, top ads, narrativ analyse, anbefalin
 ## Attribution-regel (må ALDRIG glemmes)
 
 - Angiv altid ROAS 7d_click+1d_view OG ROAS 1d_click
-- Sammenlign med agency-benchmarks for klientens segment
+- Sammenlign med benchmarks for klientens segment
 
 ## Rapport-format
 

@@ -1,5 +1,5 @@
 ---
-name: agency-strategy
+name: elle-strategy
 description: |
   Brand- og marketingstrategi med fase-logik (context → research → planning → execution → review).
   Output: komplet strategidokument i ~/agency-context/clients/[klient]/strategies/
@@ -14,7 +14,7 @@ version: 1.1.0
 author: Neble+Rohde <isidor@neble-rohde.dk>
 ---
 
-# Agency Strategy — Brand & Marketingstrategi
+# Elle Strategy — Brand & Marketingstrategi
 
 Bygger en komplet brand- og marketingstrategi i 5 faser med checkpoints, agent-spawning og auto-arkivering.
 
@@ -286,7 +286,7 @@ Hvis brugeren har aendringer:
 
 ### 5b. Afledte outputs
 Naar strategien er godkendt, tilbyd:
-- "Skal jeg lave kampagne-briefs baseret paa strategien?" → `/agency-brief`
+- "Skal jeg lave kampagne-briefs baseret paa strategien?" → `/elle:brief`
 - "Skal jeg opdatere klientens overview.md med den nye positionering?" → opdater overview
 - "Skal jeg lave en praesentation af strategien?" → document/presentation agent
 

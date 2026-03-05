@@ -1,6 +1,6 @@
-# NR_assistant
+# NR_assistant — Elle
 
-Neble+Rohde's agency workflow system til Claude. Installér én gang – få alle skills, MCP-servere og workflows klar.
+Neble+Rohde's workflow system til Claude. Installér én gang – få alle skills, MCP-servere og workflows klar.
 
 ## Hvem er det til?
 
@@ -19,9 +19,9 @@ bash ~/.claude/nr-assistant/install.sh
 
 | Komponent | Beskrivelse |
 |-----------|-------------|
-| 6 agency skills | `/agency:onboard`, `:brief`, `:creative`, `:analyze`, `:review`, `:research` |
+| 11 Elle skills | `/elle:onboard`, `:brief`, `:creative`, `:analyze`, `:review`, `:research`, `:strategy`, `:weekly`, `:discover`, `:audit`, `:help` |
 | NotebookLM skill | Source-grounded research via Google NotebookLM |
-| N+R Agency MCP | Performance data fra Supabase (Meta Ads, Klaviyo) |
+| N+R Agency MCP | Performance data fra Supabase (Meta Ads, Klaviyo, Google Ads) |
 | MCP config | Automatisk tilføjet til Claude Desktop |
 
 ## Opdater

@@ -1,4 +1,4 @@
-# N+R Agency — Kom i gang
+# Elle — Kom i gang
 
 Claude har direkte adgang til klientdata via MCP. Stil spørgsmål i naturligt sprog — Claude vælger automatisk de rigtige tools.
 
@@ -53,23 +53,23 @@ Skills er foruddefinerede workflows der kombinerer tools, agents og knowledge.
 
 | Kommando | Hvad den gør |
 |----------|-------------|
-| `/agency:onboard [klient]` | Onboard ny klient med guided spørgsmål |
-| `/agency:research [klient]` | Kør research-fase (NotebookLM + web) |
-| `/agency:brief [klient]` | Lav kampagne-brief med guided spørgsmål |
-| `/agency:creative [klient]` | Lav creative brief til produktion |
-| `/agency:analyze [klient]` | Performance-analyse med anbefaling |
-| `/agency:review [klient]` | Månedlig klientrapport |
-| `/agency:strategy [klient]` | Brand- og marketingstrategi |
-| `/agency:weekly [klient]` | Ugentlig performance-rapport |
-| `/agency:discover [brand]` | Quick discovery af nyt brand |
-| `/agency:audit [klient]` | Komplet multi-channel audit |
+| `/elle:onboard [klient]` | Onboard ny klient med guided spørgsmål |
+| `/elle:research [klient]` | Kør research-fase (NotebookLM + web) |
+| `/elle:brief [klient]` | Lav kampagne-brief med guided spørgsmål |
+| `/elle:creative [klient]` | Lav creative brief til produktion |
+| `/elle:analyze [klient]` | Performance-analyse med anbefaling |
+| `/elle:review [klient]` | Månedlig klientrapport |
+| `/elle:strategy [klient]` | Brand- og marketingstrategi |
+| `/elle:weekly [klient]` | Ugentlig performance-rapport |
+| `/elle:discover [brand]` | Quick discovery af nyt brand |
+| `/elle:audit [klient]` | Komplet multi-channel audit |
 
 ### Eksempel-brug
 ```
-/agency:analyze Gastrotools DK
-/agency:weekly all
-/agency:discover Vinny's
-/agency:onboard NyKlient
+/elle:analyze Gastrotools DK
+/elle:weekly all
+/elle:discover Vinny's
+/elle:onboard NyKlient
 ```
 
 ---

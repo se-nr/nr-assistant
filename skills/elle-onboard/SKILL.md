@@ -1,8 +1,8 @@
 ---
-name: agency-onboard
+name: elle-onboard
 description: |
   Onboard en ny klient med guided spørgsmål. Output: clients/[navn]/overview.md.
-  Brug når en ny klient skal tilføjes til agency-context databasen.
+  Brug når en ny klient skal tilføjes til klient-databasen.
   Trigger: "onboard klient", "ny klient", "tilføj klient"
 argument-hint: "[klient-navn]"
 allowed-tools: Read, Write, Bash, AskUserQuestion, Task
@@ -10,7 +10,7 @@ version: 1.1.0
 author: Neble+Rohde <isidor@neble-rohde.dk>
 ---
 
-# Agency Onboard
+# Elle Onboard
 
 Guided onboarding af en ny klient med auto-arkivering.
 

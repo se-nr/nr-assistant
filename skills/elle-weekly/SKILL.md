@@ -1,5 +1,5 @@
 ---
-name: agency-weekly
+name: elle-weekly
 description: |
   Ugentlig performance-rapport. Hurtig, Slack-venlig, med begge attribution-vinduer.
   Output: rapport i ~/agency-context/clients/[klient]/ + auto-arkivering.
@@ -10,7 +10,7 @@ version: 1.0.0
 author: Neble+Rohde <isidor@neble-rohde.dk>
 ---
 
-# Agency Weekly — Ugentlig Performance-rapport
+# Elle Weekly — Ugentlig Performance-rapport
 
 Hurtig ugentlig rapport: data ind, indsigter ud, arkiveret automatisk.
 

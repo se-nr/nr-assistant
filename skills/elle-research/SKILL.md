@@ -1,5 +1,5 @@
 ---
-name: agency-research
+name: elle-research
 description: |
   Kør research-fase for en klient. Querier NotebookLM automatisk hvis en notebook eksisterer, ellers web research.
   Output: udfyldt clients/[klient]/context/research-sources.md klar til brand strategi og copy.
@@ -10,7 +10,7 @@ version: 1.1.0
 author: Neble+Rohde <isidor@neble-rohde.dk>
 ---
 
-# Agency Research
+# Elle Research
 
 Automatisk research-fase via NotebookLM (primær) eller web (fallback).
 

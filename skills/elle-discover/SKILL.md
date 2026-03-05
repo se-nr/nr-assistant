@@ -1,5 +1,5 @@
 ---
-name: agency-discover
+name: elle-discover
 description: |
   Quick discovery af potentiel klient/lead. Hurtig web research, fit-vurdering, konkurrent-scan.
   Output: discovery-rapport i ~/agency-context/clients/[brand]/.
@@ -10,7 +10,7 @@ version: 1.0.0
 author: Neble+Rohde <isidor@neble-rohde.dk>
 ---
 
-# Agency Discover — Quick Lead/Prospect Discovery
+# Elle Discover — Quick Lead/Prospect Discovery
 
 Hurtig discovery af potentiel klient. 15-20 min research → 1-sides rapport med fit-vurdering.
 
@@ -22,7 +22,7 @@ Hurtig discovery af potentiel klient. 15-20 min research → 1-sides rapport med
 <philosophy>
 Discovery handler om hastighed og relevans — ikke dybde.
 Maalet er at vide nok til at tage en kvalificeret beslutning om klienten er et godt fit.
-Dybere research koeres bagefter med /agency:research.
+Dybere research koeres bagefter med /elle:research.
 </philosophy>
 
 <process>
@@ -132,7 +132,7 @@ Opret mappen hvis den ikke findes.
 ## Trin 7: Vis rapport
 
 Vis hele discovery-rapporten direkte til brugeren.
-Tilbyd: "Skal jeg koere dybere research? (/agency:research [brand])"
+Tilbyd: "Skal jeg koere dybere research? (/elle:research [brand])"
 
 </process>
 

@@ -1,7 +1,7 @@
 {
   "name": "nr-assistant",
   "version": "1.0.0",
-  "description": "Neble+Rohde agency workflow system – guided onboarding, briefs, creative, performance analyse, månedlig review og source-grounded research via NotebookLM. Inkluderer N+R Agency MCP til automatisk datahentning fra Supabase.",
+  "description": "Neble+Rohde workflow system 'Elle' – guided onboarding, briefs, creative, performance analyse, månedlig review og source-grounded research via NotebookLM. Inkluderer N+R Agency MCP til automatisk datahentning fra Supabase.",
   "author": {
     "name": "Neble+Rohde",
     "email": "isidor@neble-rohde.dk"

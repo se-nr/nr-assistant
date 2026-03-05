@@ -8,7 +8,7 @@
 
 NR_assistant er Neble+Rohdes interne AI-system der giver hele teamet adgang til:
 
-1. **7 agency skills** — guided workflows til onboarding, research, strategi, briefs, creative, analyse og review
+1. **11 Elle skills** — guided workflows til onboarding, research, strategi, briefs, creative, analyse, review, weekly, discover, audit og help
 2. **Automatisk data** — performance-data fra Supabase (Meta Ads, Klaviyo) uden at åbne Ads Manager
 3. **Source-grounded research** — query NotebookLM notebooks direkte fra Claude
 
@@ -38,13 +38,13 @@ bash ~/.claude/nr-assistant/install.sh
 # 4. Færdig!
 ```
 
-Installeren kopierer skills, opsætter MCP-konfiguration og checker at agency-context er tilgængeligt.
+Installeren kopierer skills, opsætter MCP-konfiguration og checker at klient-kontekst er tilgængeligt.
 
 ---
 
-## De 7 skills
+## De 11 skills
 
-### `/agency-onboard` — Ny klient
+### `/elle:onboard` — Ny klient
 Guided onboarding med spørgsmål om brand, TOV, platforme, mål.
 **Output:** `~/agency-context/clients/[klient]/overview.md`
 
@@ -52,7 +52,7 @@ Guided onboarding med spørgsmål om brand, TOV, platforme, mål.
 
 ---
 
-### `/agency-research` — Research
+### `/elle:research` — Research
 Querier NotebookLM automatisk (5 queries: value props, VoC+, VoC-, målgruppe, konkurrenter).
 Falder tilbage til web research hvis ingen notebook.
 **Output:** `~/agency-context/clients/[klient]/context/research-sources.md`
@@ -61,7 +61,7 @@ Falder tilbage til web research hvis ingen notebook.
 
 ---
 
-### `/agency-strategy` — Brand & marketingstrategi *(ny — fase-baseret)*
+### `/elle:strategy` — Brand & marketingstrategi *(fase-baseret)*
 Komplet strategi i 5 faser med checkpoints: Context → Research → Planning → Execution → Review.
 Brugeren godkender hver fase før næste starter.
 **Output:** `~/agency-context/clients/[klient]/strategies/[dato]-[emne].md`
@@ -70,16 +70,16 @@ Brugeren godkender hver fase før næste starter.
 
 ---
 
-### `/agency-brief` — Kampagne-brief
+### `/elle:brief` — Kampagne-brief
 Bygger et kampagne-brief med hooks, copy angles, targeting.
-Tjekker om research er lavet først (foreslår `/agency-research` hvis ikke).
+Tjekker om research er lavet først (foreslår `/elle:research` hvis ikke).
 **Output:** `~/agency-context/clients/[klient]/briefs/[dato]-[emne].md`
 
 **Eksempel:** "Lav et brief for Zizzi Black Friday"
 
 ---
 
-### `/agency-creative` — Creative copy
+### `/elle:creative` — Creative copy
 Genererer ad copy (primary text, headlines, descriptions) fra et eksisterende brief.
 Formaterer til Meta Ads / Google Ads specs.
 **Output:** `~/agency-context/clients/[klient]/creatives/[dato]-[emne].md`
@@ -88,7 +88,7 @@ Formaterer til Meta Ads / Google Ads specs.
 
 ---
 
-### `/agency-analyze` — Performance-analyse
+### `/elle:analyze` — Performance-analyse
 Henter data automatisk via MCP (eller du indsætter manuelt).
 Beregner altid ROAS med begge attribution-vinduer (7d_click+1d_view OG 1d_click).
 **Output:** Rapport med executive summary, oversigtstabel, narrativ analyse, anbefaling.
@@ -97,7 +97,7 @@ Beregner altid ROAS med begge attribution-vinduer (7d_click+1d_view OG 1d_click)
 
 ---
 
-### `/agency-review` — Månedlig review
+### `/elle:review` — Månedlig review
 Komplet klient-rapport med top 3 kreative, næste måneds prioriteter.
 Opdaterer klientens history.md med læringsmomenter.
 **Output:** `~/agency-context/clients/[klient]/monthly-[YYYY-MM]-report.md`
@@ -191,7 +191,7 @@ NR_assistant erstatter **ikke** marketing-ai-agents — de supplerer hinanden:
 | System | Fokus | Styrke |
 |--------|-------|--------|
 | **marketing-ai-agents** | Content-produktion (14 agents, copywriting, præsentationer) | Bred — dækker alle kanaler og output-typer |
-| **NR_assistant** | Agency-workflows + automatisk data | Dyb — automatiserer data, research og rapportering |
+| **NR_assistant (Elle)** | Guided workflows + automatisk data | Dyb — automatiserer data, research og rapportering |
 
 De deler klient-data via `agency-context/` (NR_assistant) og `workspace/clients/` (marketing-ai-agents).
 
@@ -214,4 +214,4 @@ De deler klient-data via `agency-context/` (NR_assistant) og `workspace/clients/
 | MCP data mangler | Tjek at Supabase credentials er sat i env vars |
 | NotebookLM fejler | Kør `cd ~/.claude/skills/notebooklm && python scripts/run.py auth_manager.py setup` |
 | Gamle data | Kør `trigger_sync` eller vent til kl. 06:00 (daglig auto-sync) |
-| Ny klient mangler | Kør `/agency-onboard [klient]` først |
+| Ny klient mangler | Kør `/elle:onboard [klient]` først |

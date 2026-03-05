@@ -1,5 +1,5 @@
 ---
-name: agency-review
+name: elle-review
 description: |
   Månedlig status – fra performance-data til komplet klient-rapport.
   Brug til månedlige klient-reviews med rapport og næste måneds prioriteter.
@@ -10,7 +10,7 @@ version: 1.1.0
 author: Neble+Rohde <isidor@neble-rohde.dk>
 ---
 
-# Agency Monthly Review
+# Elle Monthly Review
 
 Månedlig status-review med cross-channel orchestrator og auto-arkivering.
 

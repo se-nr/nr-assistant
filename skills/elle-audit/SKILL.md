@@ -1,5 +1,5 @@
 ---
-name: agency-audit
+name: elle-audit
 description: |
   Comprehensive multi-channel audit af en klient. Meta + Klaviyo + Google.
   Output: audit-rapport med account-sundhed, prioriteret handlingsplan.
@@ -10,7 +10,7 @@ version: 1.0.0
 author: Neble+Rohde <isidor@neble-rohde.dk>
 ---
 
-# Agency Audit — Comprehensive Klient-audit
+# Elle Audit — Comprehensive Klient-audit
 
 Multi-channel audit: Meta Ads + Klaviyo + Google Ads → samlet vurdering og prioriteret handlingsplan.
 

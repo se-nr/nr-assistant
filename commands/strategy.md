@@ -5,7 +5,7 @@ shortcut: strategy
 
 # Strategy
 
-Koer `/agency-strategy` skill med det angivne klient-navn.
+Koer `/elle-strategy` skill med det angivne klient-navn.
 
 ## Faser
 1. **Context** — spoergsmaal + eksisterende klientdata

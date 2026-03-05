@@ -1,5 +1,5 @@
 #!/bin/bash
-# NR_assistant installer
+# NR_assistant installer — Elle
 # Installerer alle skills, kontekst-links og MCP-konfiguration på én gang.
 # Kør: bash ~/.claude/nr-assistant/install.sh
 
@@ -24,7 +24,7 @@ step() { echo -e "\n${BLUE}$1${NC}"; }
 
 echo ""
 echo "╔══════════════════════════════════════╗"
-echo "║       NR_assistant – installer       ║"
+echo "║     NR_assistant — Elle installer    ║"
 echo "╚══════════════════════════════════════╝"
 echo ""
 
@@ -32,17 +32,21 @@ VERSION=$(cat "$NR_DIR/VERSION" 2>/dev/null || echo "unknown")
 info "Version: $VERSION"
 
 # ─── 1. Skills (plugin format: skills/[name]/SKILL.md) ───────────────────────
-step "1/4  Agency skills"
+step "1/4  Elle skills"
 
 mkdir -p "$SKILLS_DIR"
 SKILLS=(
-  "agency-onboard"
-  "agency-brief"
-  "agency-creative"
-  "agency-analyze"
-  "agency-review"
-  "agency-research"
-  "agency-strategy"
+  "elle-onboard"
+  "elle-brief"
+  "elle-creative"
+  "elle-analyze"
+  "elle-review"
+  "elle-research"
+  "elle-strategy"
+  "elle-weekly"
+  "elle-discover"
+  "elle-audit"
+  "elle-help"
 )
 
 for skill in "${SKILLS[@]}"; do
@@ -100,7 +104,7 @@ fi
 python3 "$NR_DIR/scripts/update_mcp_config.py" "$CLAUDE_DESKTOP_CONFIG" "$MCP_ENTRIES_RESOLVED"
 
 # ─── 4. agency-context ────────────────────────────────────────────────────────
-step "4/4  Agency kontekst-database"
+step "4/4  Klient kontekst-database"
 
 if [ -d "$CONTEXT_DIR/.git" ]; then
   ok "agency-context allerede tilgængeligt (git repo)"
@@ -115,7 +119,7 @@ fi
 # ─── Opsummering ──────────────────────────────────────────────────────────────
 echo ""
 echo "══════════════════════════════════════════"
-echo -e "${GREEN}  NR_assistant installeret!${NC}"
+echo -e "${GREEN}  Elle installeret!${NC}"
 echo "══════════════════════════════════════════"
 echo ""
 echo "Næste skridt:"

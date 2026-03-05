@@ -1,5 +1,5 @@
 ---
-name: agency-creative
+name: elle-creative
 description: |
   Lav et creative brief til det kreative team – klar til produktion.
   Brug til at oprette creative briefs med format-specs, hook, budskab og visuel retning.
@@ -10,7 +10,7 @@ version: 1.1.0
 author: Neble+Rohde <isidor@neble-rohde.dk>
 ---
 
-# Agency Creative Brief
+# Elle Creative Brief
 
 Guided creative brief med copywriter-agent og platform knowledge.
 
