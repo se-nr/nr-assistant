@@ -15,10 +15,10 @@ author: Neble+Rohde <isidor@neble-rohde.dk>
 Performance-analyse workflow med agent-spawning og auto-arkivering.
 
 <execution_context>
-@~/agency-context/agency/process.md
-@~/agency-context/agency/benchmarks.md
-@~/agency-context/agency/knowledge/meta-ads.md
-@~/agency-context/workflows/analysis.md
+@~/.claude/nr-assistant/knowledge/process.md
+@~/.claude/nr-assistant/knowledge/benchmarks.md
+@~/.claude/nr-assistant/knowledge/knowledge/meta-ads.md
+@~/.claude/nr-assistant/knowledge/workflows/analysis.md
 </execution_context>
 
 ## Process
@@ -26,8 +26,8 @@ Performance-analyse workflow med agent-spawning og auto-arkivering.
 Udfør analysis workflow fra kontekst-filerne ovenfor.
 
 Hvis et klient-navn er angivet som argument:
-1. Load `~/agency-context/clients/[klient-navn]/overview.md`
-2. Load `~/agency-context/clients/[klient-navn]/history.md` (for historiske benchmarks)
+1. Load `~/.claude/nr-assistant/clients/[klient-navn]/overview.md`
+2. Load `~/.claude/nr-assistant/clients/[klient-navn]/history.md` (for historiske benchmarks)
 
 **Data-kilder (prioriteret):**
 1. Hvis N+R Agency MCP er tilgængelig: brug `get_performance` og `get_top_ads` tools automatisk
@@ -40,7 +40,7 @@ Spawn `performance-analyst-meta` agent via Task tool:
 ```
 "Analysér Meta Ads performance for [klient].
 Kontekst: [indsæt overview.md + hentet data]
-Følg ~/agency-context/agency/agents/performance-analyst-meta.md
+Følg ~/.claude/nr-assistant/knowledge/agents/performance-analyst-meta.md
 Levér: Executive summary, nøgletalstabel, top ads, narrativ analyse, anbefaling."
 ```
 
@@ -58,12 +58,12 @@ Levér: Executive summary, nøgletalstabel, top ads, narrativ analyse, anbefalin
 
 ## Output
 
-Gem rapport som `~/agency-context/clients/[klient]/analysis-[dato]-[emne].md`
+Gem rapport som `~/.claude/nr-assistant/clients/[klient]/analysis-[dato]-[emne].md`
 
 ## Archiver
 
 Når rapporten er gemt, spawn archiver agent:
 ```
 "Arkivér analyse for [klient]. Output: [sti]. Skill: analyze.
-Følg ~/agency-context/agency/agents/archiver.md"
+Følg ~/.claude/nr-assistant/knowledge/agents/archiver.md"
 ```

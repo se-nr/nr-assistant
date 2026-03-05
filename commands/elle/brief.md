@@ -15,10 +15,10 @@ author: Neble+Rohde <isidor@neble-rohde.dk>
 Guided kampagne-brief oprettelse med copywriting knowledge.
 
 <execution_context>
-@~/agency-context/agency/process.md
-@~/agency-context/agency/knowledge/copywriting.md
-@~/agency-context/agency/templates/campaign-brief.md
-@~/agency-context/workflows/campaign-brief.md
+@~/.claude/nr-assistant/knowledge/process.md
+@~/.claude/nr-assistant/knowledge/knowledge/copywriting.md
+@~/.claude/nr-assistant/knowledge/templates/campaign-brief.md
+@~/.claude/nr-assistant/knowledge/workflows/campaign-brief.md
 </execution_context>
 
 ## Process
@@ -26,9 +26,9 @@ Guided kampagne-brief oprettelse med copywriting knowledge.
 Udfør campaign-brief workflow fra kontekst-filerne ovenfor.
 
 Hvis et klient-navn er angivet som argument:
-1. Load `~/agency-context/clients/[klient-navn]/overview.md` hvis den eksisterer
+1. Load `~/.claude/nr-assistant/clients/[klient-navn]/overview.md` hvis den eksisterer
 2. Brug klient-konteksten til at informere briefet
-3. **Research-check**: Tjek om `~/agency-context/clients/[klient]/context/research-sources.md` eksisterer.
+3. **Research-check**: Tjek om `~/.claude/nr-assistant/clients/[klient]/context/research-sources.md` eksisterer.
    Hvis den eksisterer: load den og brug research til at grunde briefet.
    Hvis den IKKE eksisterer: nævn det for brugeren – "Der er ikke lavet research for denne klient endnu. Overvej at køre /elle:research først for bedre funderet brief."
 
@@ -39,4 +39,4 @@ Brug copywriting knowledge til at sikre:
 
 ## Output
 
-Gem som `~/agency-context/clients/[klient]/brief-[YYYY-MM-DD]-[kort-navn].md`
+Gem som `~/.claude/nr-assistant/clients/[klient]/brief-[YYYY-MM-DD]-[kort-navn].md`

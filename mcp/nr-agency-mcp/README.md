@@ -9,7 +9,7 @@ Performance data + klientkontekst for hele Neble+Rohde teamet.
 | `get_clients` | List alle aktive klienter |
 | `get_performance` | Aggregeret spend, ROAS, køb for en klient |
 | `get_top_ads` | Top-performende annoncer sorteret efter ROAS/spend |
-| `get_client_context` | Brand, TOV, målgruppe fra agency-context databasen |
+| `get_client_context` | Brand, TOV, målgruppe fra klient-databasen |
 | `get_demographic_breakdown` | Alder, køn, placement breakdown |
 | `trigger_sync` | Trigger Meta Ads sync via dashboard Inngest |
 

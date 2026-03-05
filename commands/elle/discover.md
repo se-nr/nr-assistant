@@ -2,7 +2,7 @@
 name: elle:discover
 description: |
   Quick discovery af potentiel klient/lead. Hurtig web research, fit-vurdering, konkurrent-scan.
-  Output: discovery-rapport i ~/agency-context/clients/[brand]/.
+  Output: discovery-rapport i ~/.claude/nr-assistant/clients/[brand]/.
   Trigger: "discover brand", "research lead", "tjek klient", "ny prospect", "kend mig"
 argument-hint: "[brand-navn eller website URL]"
 allowed-tools: Read, Write, Task, WebSearch, WebFetch, AskUserQuestion
@@ -15,8 +15,8 @@ author: Neble+Rohde <isidor@neble-rohde.dk>
 Hurtig discovery af potentiel klient. 15-20 min research → 1-sides rapport med fit-vurdering.
 
 <execution_context>
-@~/agency-context/agency/knowledge/research-methodology.md
-@~/agency-context/agency/process.md
+@~/.claude/nr-assistant/knowledge/knowledge/research-methodology.md
+@~/.claude/nr-assistant/knowledge/process.md
 </execution_context>
 
 <philosophy>
@@ -33,7 +33,7 @@ Hvis argument er et brand-navn: brug det.
 Hvis argument er en URL: udtraek brand-navn fra URL.
 Ellers: spoerg brugeren.
 
-Tjek om `~/agency-context/clients/[brand]/` allerede eksisterer.
+Tjek om `~/.claude/nr-assistant/clients/[brand]/` allerede eksisterer.
 Hvis ja: laes overview.md og tilbyd at koere dybere research i stedet.
 
 ## Trin 2: Website-analyse
@@ -83,7 +83,7 @@ Hvis brugeren har bedt om dybere research, spawn `brand-market-research` agent:
 ```
 "Lav discovery-research for [brand].
 Brug findings fra trin 2-4 som udgangspunkt.
-Foelg ~/agency-context/agency/agents/brand-market-research.md"
+Foelg ~/.claude/nr-assistant/knowledge/agents/brand-market-research.md"
 ```
 
 ## Trin 6: Komponer discovery-rapport
@@ -126,7 +126,7 @@ Foelg ~/agency-context/agency/agents/brand-market-research.md"
 - [Anbefalet naeste skridt hvis fit > 3]
 ```
 
-Gem som: `~/agency-context/clients/[brand]/discovery-[YYYY-MM-DD].md`
+Gem som: `~/.claude/nr-assistant/clients/[brand]/discovery-[YYYY-MM-DD].md`
 Opret mappen hvis den ikke findes.
 
 ## Trin 7: Vis rapport
@@ -137,6 +137,6 @@ Tilbyd: "Skal jeg koere dybere research? (/elle:research [brand])"
 </process>
 
 <output>
-- `~/agency-context/clients/[brand]/discovery-[YYYY-MM-DD].md` — discovery-rapport
+- `~/.claude/nr-assistant/clients/[brand]/discovery-[YYYY-MM-DD].md` — discovery-rapport
 - Rapport vist direkte i chat
 </output>

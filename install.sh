@@ -115,8 +115,34 @@ fi
 
 python3 "$NR_DIR/scripts/update_mcp_config.py" "$CLAUDE_DESKTOP_CONFIG" "$MCP_ENTRIES_RESOLVED"
 
-# ─── 4. Shortcut commands ─────────────────────────────────────────────────────
-step "4/4  Shortcut commands"
+# ─── 4. Klient-mappe + shortcuts ──────────────────────────────────────────────
+step "4/4  Klient-database + shortcuts"
+
+# Opret clients/ mappe (gitignored, lokalt per maskine)
+CLIENTS_DIR="$NR_DIR/clients"
+mkdir -p "$CLIENTS_DIR"
+ok "Klient-mappe klar ($CLIENTS_DIR)"
+
+# Migrér fra ~/agency-context/clients/ hvis den eksisterer
+OLD_CONTEXT="$HOME/agency-context/clients"
+if [ -d "$OLD_CONTEXT" ] && [ ! -f "$CLIENTS_DIR/.migrated" ]; then
+  MIGRATED=0
+  for client_dir in "$OLD_CONTEXT"/*/; do
+    client_name=$(basename "$client_dir")
+    if [ "$client_name" != "_template" ] && [[ "$client_name" != _* ]]; then
+      if [ ! -d "$CLIENTS_DIR/$client_name" ]; then
+        cp -r "$client_dir" "$CLIENTS_DIR/$client_name"
+        MIGRATED=$((MIGRATED + 1))
+      fi
+    fi
+  done
+  if [ $MIGRATED -gt 0 ]; then
+    ok "Migreret $MIGRATED klienter fra ~/agency-context/clients/"
+    touch "$CLIENTS_DIR/.migrated"
+  fi
+fi
+
+# Shortcut commands
 
 SHORTCUT_DIR="$HOME/.claude/commands"
 SHORTCUT_SRC="$NR_DIR/commands"

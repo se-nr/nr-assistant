@@ -46,7 +46,7 @@ Installeren kopierer skills, opsætter MCP-konfiguration og checker at klient-ko
 
 ### `/elle:onboard` — Ny klient
 Guided onboarding med spørgsmål om brand, TOV, platforme, mål.
-**Output:** `~/agency-context/clients/[klient]/overview.md`
+**Output:** `~/.claude/nr-assistant/clients/[klient]/overview.md`
 
 **Eksempel:** "Onboard en ny klient der hedder Nordic Glow"
 
@@ -55,7 +55,7 @@ Guided onboarding med spørgsmål om brand, TOV, platforme, mål.
 ### `/elle:research` — Research
 Querier NotebookLM automatisk (5 queries: value props, VoC+, VoC-, målgruppe, konkurrenter).
 Falder tilbage til web research hvis ingen notebook.
-**Output:** `~/agency-context/clients/[klient]/context/research-sources.md`
+**Output:** `~/.claude/nr-assistant/clients/[klient]/context/research-sources.md`
 
 **Eksempel:** "Kør research for Zizzi"
 
@@ -64,7 +64,7 @@ Falder tilbage til web research hvis ingen notebook.
 ### `/elle:strategy` — Brand & marketingstrategi *(fase-baseret)*
 Komplet strategi i 5 faser med checkpoints: Context → Research → Planning → Execution → Review.
 Brugeren godkender hver fase før næste starter.
-**Output:** `~/agency-context/clients/[klient]/strategies/[dato]-[emne].md`
+**Output:** `~/.claude/nr-assistant/clients/[klient]/strategies/[dato]-[emne].md`
 
 **Eksempel:** "Lav en marketingstrategi for Zizzi Q2"
 
@@ -73,7 +73,7 @@ Brugeren godkender hver fase før næste starter.
 ### `/elle:brief` — Kampagne-brief
 Bygger et kampagne-brief med hooks, copy angles, targeting.
 Tjekker om research er lavet først (foreslår `/elle:research` hvis ikke).
-**Output:** `~/agency-context/clients/[klient]/briefs/[dato]-[emne].md`
+**Output:** `~/.claude/nr-assistant/clients/[klient]/briefs/[dato]-[emne].md`
 
 **Eksempel:** "Lav et brief for Zizzi Black Friday"
 
@@ -82,7 +82,7 @@ Tjekker om research er lavet først (foreslår `/elle:research` hvis ikke).
 ### `/elle:creative` — Creative copy
 Genererer ad copy (primary text, headlines, descriptions) fra et eksisterende brief.
 Formaterer til Meta Ads / Google Ads specs.
-**Output:** `~/agency-context/clients/[klient]/creatives/[dato]-[emne].md`
+**Output:** `~/.claude/nr-assistant/clients/[klient]/creatives/[dato]-[emne].md`
 
 **Eksempel:** "Skriv creative copy for det seneste Zizzi brief"
 
@@ -100,7 +100,7 @@ Beregner altid ROAS med begge attribution-vinduer (7d_click+1d_view OG 1d_click)
 ### `/elle:review` — Månedlig review
 Komplet klient-rapport med top 3 kreative, næste måneds prioriteter.
 Opdaterer klientens history.md med læringsmomenter.
-**Output:** `~/agency-context/clients/[klient]/monthly-[YYYY-MM]-report.md`
+**Output:** `~/.claude/nr-assistant/clients/[klient]/monthly-[YYYY-MM]-report.md`
 
 **Eksempel:** "Månedsstatus for Zizzi februar"
 
@@ -145,9 +145,9 @@ Du behøver aldrig åbne Ads Manager for at se data — MCP'en henter det automa
 
 ---
 
-## Klient-database (agency-context)
+## Klient-database
 
-Alle klientoplysninger ligger i `~/agency-context/clients/`:
+Alle klientoplysninger ligger i `~/.claude/nr-assistant/clients/` (lokalt, gitignored):
 
 ```
 clients/
@@ -193,7 +193,7 @@ NR_assistant erstatter **ikke** marketing-ai-agents — de supplerer hinanden:
 | **marketing-ai-agents** | Content-produktion (14 agents, copywriting, præsentationer) | Bred — dækker alle kanaler og output-typer |
 | **NR_assistant (Elle)** | Guided workflows + automatisk data | Dyb — automatiserer data, research og rapportering |
 
-De deler klient-data via `agency-context/` (NR_assistant) og `workspace/clients/` (marketing-ai-agents).
+De deler klient-data via `~/.claude/nr-assistant/clients/` (Elle) og `workspace/clients/` (marketing-ai-agents).
 
 ---
 
@@ -202,7 +202,7 @@ De deler klient-data via `agency-context/` (NR_assistant) og `workspace/clients/
 - **GitHub repo** er privat — kun inviterede teammedlemmer har adgang
 - **Supabase credentials** er i env vars, aldrig i koden
 - **Remote MCP** (Vercel) kræver API key i Authorization header
-- **Klientdata** lever lokalt i `~/agency-context/` (aldrig i plugin-repo'et)
+- **Klientdata** lever lokalt i `~/.claude/nr-assistant/clients/` (gitignored, aldrig pushet)
 
 ---
 
@@ -210,7 +210,7 @@ De deler klient-data via `agency-context/` (NR_assistant) og `workspace/clients/
 
 | Problem | Løsning |
 |---------|---------|
-| Skills virker ikke | Kør `bash install.sh` igen |
+| Commands virker ikke | Kør `bash install.sh` igen |
 | MCP data mangler | Tjek at Supabase credentials er sat i env vars |
 | NotebookLM fejler | Kør `cd ~/.claude/skills/notebooklm && python scripts/run.py auth_manager.py setup` |
 | Gamle data | Kør `trigger_sync` eller vent til kl. 06:00 (daglig auto-sync) |

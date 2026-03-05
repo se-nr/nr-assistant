@@ -2,7 +2,7 @@
 name: elle:strategy
 description: |
   Brand- og marketingstrategi med fase-logik (context → research → planning → execution → review).
-  Output: komplet strategidokument i ~/agency-context/clients/[klient]/strategies/
+  Output: komplet strategidokument i ~/.claude/nr-assistant/clients/[klient]/strategies/
 triggers:
   - brand strategi
   - marketingstrategi
@@ -19,14 +19,14 @@ author: Neble+Rohde <isidor@neble-rohde.dk>
 Bygger en komplet brand- og marketingstrategi i 5 faser med checkpoints, agent-spawning og auto-arkivering.
 
 <execution_context>
-@~/agency-context/agency/process.md
-@~/agency-context/agency/knowledge/copywriting.md
-@~/agency-context/agency/knowledge/meta-ads.md
-@~/agency-context/agency/knowledge/research-methodology.md
-@~/agency-context/agency/benchmarks.md
+@~/.claude/nr-assistant/knowledge/process.md
+@~/.claude/nr-assistant/knowledge/knowledge/copywriting.md
+@~/.claude/nr-assistant/knowledge/knowledge/meta-ads.md
+@~/.claude/nr-assistant/knowledge/knowledge/research-methodology.md
+@~/.claude/nr-assistant/knowledge/benchmarks.md
 </execution_context>
 
-**Output:** `~/agency-context/clients/[klient]/strategies/[dato]-[emne].md`
+**Output:** `~/.claude/nr-assistant/clients/[klient]/strategies/[dato]-[emne].md`
 
 ---
 
@@ -48,14 +48,14 @@ Bygger en komplet brand- og marketingstrategi i 5 faser med checkpoints, agent-s
 I Fase 2 (Research): spawn `brand-market-research` agent:
 ```
 "Lav research for [klient] strategi.
-Følg ~/agency-context/agency/agents/brand-market-research.md"
+Følg ~/.claude/nr-assistant/knowledge/agents/brand-market-research.md"
 ```
 
 I Fase 3 (Planning): spawn `brand-marketing-strategist` agent:
 ```
 "Udvikl strategiske beslutninger for [klient].
 Kontekst: [context-brief + research-output]
-Følg ~/agency-context/agency/agents/brand-marketing-strategist.md"
+Følg ~/.claude/nr-assistant/knowledge/agents/brand-marketing-strategist.md"
 ```
 
 ## Archiver (Fase 6 — automatisk efter godkendelse)
@@ -63,7 +63,7 @@ Følg ~/agency-context/agency/agents/brand-marketing-strategist.md"
 Spawn archiver agent:
 ```
 "Arkivér strategi for [klient]. Output: [sti]. Skill: strategy.
-Følg ~/agency-context/agency/agents/archiver.md"
+Følg ~/.claude/nr-assistant/knowledge/agents/archiver.md"
 ```
 
 ---
@@ -71,7 +71,7 @@ Følg ~/agency-context/agency/agents/archiver.md"
 ## Fase 1: CONTEXT (spoergsmaal + eksisterende data)
 
 ### 1a. Tjek eksisterende klientdata
-Kig efter `~/agency-context/clients/[klient]/overview.md`.
+Kig efter `~/.claude/nr-assistant/clients/[klient]/overview.md`.
 - Hvis den findes: laes den og brug som udgangspunkt
 - Hvis ikke: koer de basale onboarding-spoergsmaal foerst (brand, TOV, platforme)
 
@@ -267,7 +267,7 @@ Skriv det komplette strategidokument med denne struktur:
 ```
 
 ### 4b. Gem filen
-Gem i: `~/agency-context/clients/[klient]/strategies/[dato]-[emne].md`
+Gem i: `~/.claude/nr-assistant/clients/[klient]/strategies/[dato]-[emne].md`
 Opret mappen `strategies/` hvis den ikke findes.
 
 > **CHECKPOINT 4:** "Strategidokumentet er klar. Gennemgaa det og giv feedback."
@@ -291,7 +291,7 @@ Naar strategien er godkendt, tilbyd:
 - "Skal jeg lave en praesentation af strategien?" → document/presentation agent
 
 ### 5c. Opdater klient-historik
-Tilfoej til `~/agency-context/clients/[klient]/history.md`:
+Tilfoej til `~/.claude/nr-assistant/clients/[klient]/history.md`:
 ```markdown
 ## [dato] — Strategi: [emne]
 - Scope: [periode]

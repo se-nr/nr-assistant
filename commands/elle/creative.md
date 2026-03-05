@@ -15,11 +15,11 @@ author: Neble+Rohde <isidor@neble-rohde.dk>
 Guided creative brief med copywriter-agent og platform knowledge.
 
 <execution_context>
-@~/agency-context/agency/process.md
-@~/agency-context/agency/knowledge/copywriting.md
-@~/agency-context/agency/knowledge/meta-ads.md
-@~/agency-context/agency/templates/creative-brief.md
-@~/agency-context/workflows/creative-brief.md
+@~/.claude/nr-assistant/knowledge/process.md
+@~/.claude/nr-assistant/knowledge/knowledge/copywriting.md
+@~/.claude/nr-assistant/knowledge/knowledge/meta-ads.md
+@~/.claude/nr-assistant/knowledge/templates/creative-brief.md
+@~/.claude/nr-assistant/knowledge/workflows/creative-brief.md
 </execution_context>
 
 ## Process
@@ -27,10 +27,10 @@ Guided creative brief med copywriter-agent og platform knowledge.
 Udfør creative-brief workflow fra kontekst-filerne ovenfor.
 
 Hvis et klient-navn er angivet som argument:
-1. Load `~/agency-context/clients/[klient-navn]/overview.md` hvis den eksisterer
-2. Tjek om der allerede er et kampagne-brief: `~/agency-context/clients/[klient]/brief-*.md`
+1. Load `~/.claude/nr-assistant/clients/[klient-navn]/overview.md` hvis den eksisterer
+2. Tjek om der allerede er et kampagne-brief: `~/.claude/nr-assistant/clients/[klient]/brief-*.md`
    Brug eksisterende brief som grundlag hvis tilgængeligt
-3. **Research-check**: Tjek om `~/agency-context/clients/[klient]/context/research-sources.md` eksisterer.
+3. **Research-check**: Tjek om `~/.claude/nr-assistant/clients/[klient]/context/research-sources.md` eksisterer.
    Hvis den eksisterer: load VoC-citater og konkurrentlandskab – brug til at skærpe hooks og budskaber.
    Hvis den IKKE eksisterer: nævn det for brugeren.
 
@@ -41,7 +41,7 @@ Hvis brugeren beder om ad copy som del af creative briefet, spawn `meta-ads-copy
 "Skriv Meta Ads copy for [klient], kampagne: [kampagne-navn].
 Brief: [indsæt brief-indhold]
 VoC: [indsæt research-sources hvis tilgængelig]
-Følg ~/agency-context/agency/agents/meta-ads-copywriter.md
+Følg ~/.claude/nr-assistant/knowledge/agents/meta-ads-copywriter.md
 Levér: 3-5 ad variationer med primary text, headline, description, CTA per funnel-stadie."
 ```
 
@@ -54,4 +54,4 @@ Brug meta-ads.md knowledge til at sikre:
 
 ## Output
 
-Gem som `~/agency-context/clients/[klient]/creative-brief-[dato]-[kampagne].md`
+Gem som `~/.claude/nr-assistant/clients/[klient]/creative-brief-[dato]-[kampagne].md`

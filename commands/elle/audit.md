@@ -15,18 +15,18 @@ author: Neble+Rohde <isidor@neble-rohde.dk>
 Multi-channel audit: Meta Ads + Klaviyo + Google Ads → samlet vurdering og prioriteret handlingsplan.
 
 <execution_context>
-@~/agency-context/agency/process.md
-@~/agency-context/agency/benchmarks.md
-@~/agency-context/agency/knowledge/meta-ads.md
-@~/agency-context/agency/knowledge/klaviyo.md
-@~/agency-context/agency/knowledge/google-ads.md
+@~/.claude/nr-assistant/knowledge/process.md
+@~/.claude/nr-assistant/knowledge/benchmarks.md
+@~/.claude/nr-assistant/knowledge/knowledge/meta-ads.md
+@~/.claude/nr-assistant/knowledge/knowledge/klaviyo.md
+@~/.claude/nr-assistant/knowledge/knowledge/google-ads.md
 </execution_context>
 
 <process>
 
 ## Trin 1: Identificer klient og kanaler
 
-Laes `~/agency-context/clients/[klient]/overview.md`:
+Laes `~/.claude/nr-assistant/clients/[klient]/overview.md`:
 - Hvilke kanaler er aktive? (Meta, Google, Klaviyo, etc.)
 - Hvad er klientens maal og targets?
 - Er der historik fra tidligere analyser? (tjek history.md)
@@ -42,7 +42,7 @@ Spawn op til 3 agents parallelt via Task tool (kun for aktive kanaler):
 "Lav Meta Ads audit for [klient].
 Hent data via NR Agency MCP: get_performance(last_30d), get_top_ads(last_30d, roas, 10), get_demographic_breakdown(last_30d, age), get_demographic_breakdown(last_30d, country).
 Klient-kontekst: [indsaet overview.md]
-Foelg ~/agency-context/agency/agents/performance-analyst-meta.md
+Foelg ~/.claude/nr-assistant/knowledge/agents/performance-analyst-meta.md
 Fokus paa: kampagnestruktur, creative performance, audience efficiency, budget-allokering."
 ```
 
@@ -50,14 +50,14 @@ Fokus paa: kampagnestruktur, creative performance, audience efficiency, budget-a
 ```
 "Lav Klaviyo audit for [klient].
 Hent data via Klaviyo MCP: get_flows, get_flow_report, get_campaign_report, get_segments.
-Foelg ~/agency-context/agency/agents/performance-analyst-klaviyo.md
+Foelg ~/.claude/nr-assistant/knowledge/agents/performance-analyst-klaviyo.md
 Fokus paa: flow-sundhed, campaign-cadence, segmentering, deliverability."
 ```
 
 **Agent 3 — Google Ads (hvis aktiv):**
 ```
 "Lav Google Ads audit for [klient].
-Foelg ~/agency-context/agency/agents/performance-analyst-google.md
+Foelg ~/.claude/nr-assistant/knowledge/agents/performance-analyst-google.md
 Fokus paa: kampagnestruktur, Quality Score, bidding, feed-kvalitet."
 ```
 
@@ -73,7 +73,7 @@ Spawn `analysis-orchestrator` agent:
 Meta-audit: [indsaet output fra agent 1]
 Klaviyo-audit: [indsaet output fra agent 2]
 Google-audit: [indsaet output fra agent 3, hvis relevant]
-Foelg ~/agency-context/agency/agents/analysis-orchestrator.md
+Foelg ~/.claude/nr-assistant/knowledge/agents/analysis-orchestrator.md
 Levér: Cross-channel indsigter, budget-anbefaling, prioriteret handlingsplan (top 10)."
 ```
 
@@ -144,7 +144,7 @@ Levér: Cross-channel indsigter, budget-anbefaling, prioriteret handlingsplan (t
 [2-3 saetninger om anbefalet fremgangsmade]
 ```
 
-Gem som: `~/agency-context/clients/[klient]/audit-[YYYY-MM-DD].md`
+Gem som: `~/.claude/nr-assistant/clients/[klient]/audit-[YYYY-MM-DD].md`
 
 ## Trin 6: Trigger archiver
 
@@ -154,7 +154,7 @@ Spawn archiver agent:
 Output-fil: [sti]
 Key metrics: { meta_roas_7d, meta_roas_1d, meta_spend, klaviyo_revenue, account_health_score }
 Skill type: audit
-Foelg ~/agency-context/agency/agents/archiver.md"
+Foelg ~/.claude/nr-assistant/knowledge/agents/archiver.md"
 ```
 
 ## Trin 7: Vis rapport
@@ -166,7 +166,7 @@ Tilbyd: "Skal jeg lave kampagne-briefs for de hoejest prioriterede handlinger?"
 </process>
 
 <output>
-- `~/agency-context/clients/[klient]/audit-[YYYY-MM-DD].md` — fuld audit-rapport
-- `~/agency-context/clients/[klient]/history.md` — opdateret via archiver
+- `~/.claude/nr-assistant/clients/[klient]/audit-[YYYY-MM-DD].md` — fuld audit-rapport
+- `~/.claude/nr-assistant/clients/[klient]/history.md` — opdateret via archiver
 - Executive Summary + Handlingsplan vist direkte i chat
 </output>

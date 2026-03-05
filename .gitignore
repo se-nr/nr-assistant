@@ -8,3 +8,6 @@ dist/
 __pycache__/
 .DS_Store
 *.backup.*.json
+
+# Klient-data (lokalt per maskine, aldrig committed)
+clients/

@@ -5,10 +5,10 @@ Du arbejder i NR_assistant-pakken. Dette er Neble+Rohde's workflow system "Elle"
 ## Hvad er dette?
 
 En installérbar pakke der giver hele teamet adgang til:
-- **Elle skills** (`/elle:*`) – onboarding, brief, kreativ, analyse, review, research
+- **Elle commands** (`/elle:*`) – onboarding, brief, kreativ, analyse, review, research
 - **NotebookLM MCP** – automatisk kildegrounded research via Google NotebookLM
 - **N+R Agency MCP** – performance data fra Supabase + klientkontekst fra Google Drive
-- **Agency kontekst** (`~/agency-context/`) – klient-database, workflows, templates
+- **Knowledge base** (`knowledge/`) – process, benchmarks, templates, workflows, agent-instruktioner
 
 ## Pakke-struktur
 
@@ -18,66 +18,68 @@ En installérbar pakke der giver hele teamet adgang til:
 ├── install.sh                 ← Installér alt på én maskine
 ├── update.sh                  ← Opdater og re-deploy
 ├── CLAUDE.md                  ← Du er her
-├── skills/                    ← Canonical source for alle Elle skills
-│   ├── elle-onboard/SKILL.md
-│   ├── elle-brief/SKILL.md
-│   ├── elle-creative/SKILL.md
-│   ├── elle-analyze/SKILL.md
-│   ├── elle-review/SKILL.md
-│   ├── elle-research/SKILL.md
-│   ├── elle-strategy/SKILL.md
-│   ├── elle-weekly/SKILL.md
-│   ├── elle-discover/SKILL.md
-│   ├── elle-audit/SKILL.md
-│   └── elle-help/SKILL.md
+├── commands/
+│   ├── elle/                  ← Elle commands (→ /elle:*)
+│   │   ├── onboard.md
+│   │   ├── brief.md
+│   │   ├── creative.md
+│   │   ├── analyze.md
+│   │   ├── review.md
+│   │   ├── research.md
+│   │   ├── strategy.md
+│   │   ├── weekly.md
+│   │   ├── discover.md
+│   │   ├── audit.md
+│   │   └── help.md
+│   ├── analyze.md             ← Shortcuts (/analyze, /brief, ...)
+│   ├── brief.md
+│   └── ...
+├── knowledge/                 ← Metodik, templates, workflows
+│   ├── process.md
+│   ├── benchmarks.md
+│   ├── _template.md
+│   ├── knowledge/             ← Kanal-viden (meta-ads, klaviyo, ...)
+│   ├── templates/             ← Brief- og rapport-templates
+│   ├── workflows/             ← Workflow-beskrivelser
+│   └── agents/                ← Agent-instruktioner
+├── clients/                   ← Klient-data (gitignored, lokalt)
+│   └── [klient]/overview.md
 ├── mcp/
-│   ├── notebooklm/            ← MCP wrapper til NotebookLM skill
-│   │   ├── mcp_server.py
-│   │   └── start_mcp.sh
-│   └── nr-agency-mcp/         ← N+R Agency MCP (TypeScript/Vercel)
-│       ├── src/index.ts
-│       ├── package.json
-│       └── README.md
+│   ├── notebooklm/
+│   └── nr-agency-mcp/
 ├── config/
-│   └── mcp-entries.json       ← MCP entries til claude_desktop_config.json
+│   └── mcp-entries.json
 └── scripts/
-    └── update_mcp_config.py   ← Merger MCP config sikkert
+    └── update_mcp_config.py
 ```
 
 ## Admin-workflows
 
-### Opdater en skill
-1. Redigér filen i `skills/elle-[navn]/SKILL.md`
+### Opdater en command
+1. Redigér filen i `commands/elle/[navn].md`
 2. Test med `/elle:[navn]` i Claude Code
-3. Commit: `git add skills/ && git commit -m "feat(skill): ..."`
+3. Commit: `git add commands/ && git commit -m "feat(elle): ..."`
 4. Push: `git push`
 5. Teamet kører `./update.sh` for at få opdateringen
 
-### Tilføj ny skill
-1. Opret `skills/elle-[ny]/SKILL.md` med korrekt frontmatter
-2. Tilføj til `SKILLS`-arrayet i `install.sh`
+### Tilføj ny command
+1. Opret `commands/elle/[ny].md` med korrekt frontmatter
+2. Tilføj til `COMMANDS`-arrayet i `install.sh`
 3. Test, commit, push
 
-### Opdater N+R Agency MCP
-1. Redigér `mcp/nr-agency-mcp/src/index.ts`
-2. Byg: `cd mcp/nr-agency-mcp && npm run build`
-3. Deploy: `vercel deploy --prod` (eller push til Vercel-connected repo)
-4. Nye tools er tilgængelige for hele teamet automatisk
-
 ### Tilføj ny klient
-1. Opret `~/agency-context/clients/[klient]/`
-2. Kopier `~/agency-context/clients/_template.md` → `overview.md`
-3. Kør `/elle:onboard [klient]` for guided onboarding
-4. Push til agency-context GitHub
+1. Kør `/elle:onboard [klient]` for guided onboarding
+2. Filen gemmes i `~/.claude/nr-assistant/clients/[klient]/overview.md`
 
 ## Vigtige stier
 
 | Hvad | Sti |
 |------|-----|
-| Skills (kilde) | `~/.claude/nr-assistant/skills/` |
-| Skills (deployed) | `~/.claude/skills/` |
+| Commands (kilde) | `~/.claude/nr-assistant/commands/elle/` |
+| Commands (deployed) | `~/.claude/commands/elle/` |
+| Knowledge | `~/.claude/nr-assistant/knowledge/` |
+| Klient-data | `~/.claude/nr-assistant/clients/` |
 | NotebookLM skill | `~/.claude/skills/notebooklm/` |
-| Agency kontekst | `~/agency-context/` |
 | Claude Desktop config | `~/Library/Application Support/Claude/claude_desktop_config.json` |
 | Neble+Rohde dashboard | `~/neble-rohde-dashboard/` |
 | Supabase data | Via dashboard eller Agency MCP |
@@ -85,14 +87,13 @@ En installérbar pakke der giver hele teamet adgang til:
 ## Relaterede systemer
 
 - **Supabase**: Al Meta/Klaviyo performance data (syncs dagligt via Inngest)
-- **agency-context GitHub repo**: Klient-database, workflows, templates
 - **NotebookLM**: Klientspecifik research (browser-automation, kræver lokal auth per bruger)
 - **N+R Agency MCP (Vercel)**: Org-wide performance + kontekst-adgang for alle Claude-brugere
 
 ## Installér fra bunden (ny maskine)
 
 ```bash
-git clone https://github.com/YOURORG/nr-assistant ~/.claude/nr-assistant
+git clone https://github.com/se-nr/nr-assistant ~/.claude/nr-assistant
 bash ~/.claude/nr-assistant/install.sh
 ```
 

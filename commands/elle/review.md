@@ -15,12 +15,12 @@ author: Neble+Rohde <isidor@neble-rohde.dk>
 Månedlig status-review med cross-channel orchestrator og auto-arkivering.
 
 <execution_context>
-@~/agency-context/agency/process.md
-@~/agency-context/agency/benchmarks.md
-@~/agency-context/agency/knowledge/meta-ads.md
-@~/agency-context/agency/knowledge/klaviyo.md
-@~/agency-context/agency/templates/monthly-report.md
-@~/agency-context/workflows/monthly-review.md
+@~/.claude/nr-assistant/knowledge/process.md
+@~/.claude/nr-assistant/knowledge/benchmarks.md
+@~/.claude/nr-assistant/knowledge/knowledge/meta-ads.md
+@~/.claude/nr-assistant/knowledge/knowledge/klaviyo.md
+@~/.claude/nr-assistant/knowledge/templates/monthly-report.md
+@~/.claude/nr-assistant/knowledge/workflows/monthly-review.md
 </execution_context>
 
 ## Process
@@ -28,8 +28,8 @@ Månedlig status-review med cross-channel orchestrator og auto-arkivering.
 Udfør monthly-review workflow fra kontekst-filerne ovenfor.
 
 Hvis et klient-navn (og evt. måned) er angivet som argument:
-1. Load `~/agency-context/clients/[klient-navn]/overview.md`
-2. Load `~/agency-context/clients/[klient-navn]/history.md`
+1. Load `~/.claude/nr-assistant/clients/[klient-navn]/overview.md`
+2. Load `~/.claude/nr-assistant/clients/[klient-navn]/history.md`
 3. Brug klient-specifikt baseline fremfor generelle benchmarks
 
 **Data-kilder (prioriteret):**
@@ -43,7 +43,7 @@ Spawn `analysis-orchestrator` agent via Task tool:
 ```
 "Lav månedlig review for [klient], [måned].
 Kontekst: [indsæt overview.md + data + historik]
-Følg ~/agency-context/agency/agents/analysis-orchestrator.md
+Følg ~/.claude/nr-assistant/knowledge/agents/analysis-orchestrator.md
 Levér: Cross-channel summary, kanal-gennemgang, top kreative, anbefaling til næste måned."
 ```
 
@@ -63,12 +63,12 @@ Hvis klienten har Klaviyo: spawn `performance-analyst-klaviyo` parallelt for ema
 
 ## Output
 
-Gem rapport som `~/agency-context/clients/[klient]/monthly-[YYYY-MM]-report.md`
+Gem rapport som `~/.claude/nr-assistant/clients/[klient]/monthly-[YYYY-MM]-report.md`
 
 ## Archiver
 
 Når rapporten er gemt, spawn archiver agent:
 ```
 "Arkivér månedlig review for [klient]. Output: [sti]. Skill: review.
-Følg ~/agency-context/agency/agents/archiver.md"
+Følg ~/.claude/nr-assistant/knowledge/agents/archiver.md"
 ```

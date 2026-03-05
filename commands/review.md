@@ -13,6 +13,6 @@ Kør `/elle:review` skill med klient-navn og måned.
 3. Beregn nøgletal med begge attribution-vinduer
 4. Generér rapport: executive summary, oversigtstabel, top 3 kreative, anbefaling
 5. Gem rapport + opdater history.md
-6. Gem i `~/agency-context/clients/[klient]/monthly-[YYYY-MM]-report.md`
+6. Gem i `~/.claude/nr-assistant/clients/[klient]/monthly-[YYYY-MM]-report.md`
 
 Brug argument som klient + måned. Eksempel: `/review zizzi februar`

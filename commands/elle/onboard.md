@@ -15,9 +15,9 @@ author: Neble+Rohde <isidor@neble-rohde.dk>
 Guided onboarding af en ny klient med auto-arkivering.
 
 <execution_context>
-@~/agency-context/agency/process.md
-@~/agency-context/clients/_template.md
-@~/agency-context/workflows/onboarding.md
+@~/.claude/nr-assistant/knowledge/process.md
+@~/.claude/nr-assistant/knowledge/_template.md
+@~/.claude/nr-assistant/knowledge/workflows/onboarding.md
 </execution_context>
 
 ## Process
@@ -39,7 +39,7 @@ cd ~/.claude/skills/notebooklm && python scripts/run.py notebook_manager.py add 
 
 ## Output
 
-Gem i `~/agency-context/clients/[klient-navn]/overview.md`
+Gem i `~/.claude/nr-assistant/clients/[klient-navn]/overview.md`
 
 ## Archiver
 
@@ -47,5 +47,5 @@ Når onboarding er færdig, spawn archiver agent via Task tool:
 ```
 "Arkivér onboarding for [klient]. Output: [sti til overview.md]. Skill: onboard.
 Opret history.md med initial entry.
-Følg ~/agency-context/agency/agents/archiver.md"
+Følg ~/.claude/nr-assistant/knowledge/agents/archiver.md"
 ```

@@ -2,7 +2,7 @@
 name: elle:weekly
 description: |
   Ugentlig performance-rapport. Hurtig, Slack-venlig, med begge attribution-vinduer.
-  Output: rapport i ~/agency-context/clients/[klient]/ + auto-arkivering.
+  Output: rapport i ~/.claude/nr-assistant/clients/[klient]/ + auto-arkivering.
   Trigger: "ugentlig rapport", "weekly report", "uge status", "ugens performance"
 argument-hint: "[klient-navn] (eller 'all' for alle klienter)"
 allowed-tools: Read, Write, Bash, Task, AskUserQuestion
@@ -15,10 +15,10 @@ author: Neble+Rohde <isidor@neble-rohde.dk>
 Hurtig ugentlig rapport: data ind, indsigter ud, arkiveret automatisk.
 
 <execution_context>
-@~/agency-context/agency/process.md
-@~/agency-context/agency/benchmarks.md
-@~/agency-context/agency/knowledge/meta-ads.md
-@~/agency-context/agency/knowledge/klaviyo.md
+@~/.claude/nr-assistant/knowledge/process.md
+@~/.claude/nr-assistant/knowledge/benchmarks.md
+@~/.claude/nr-assistant/knowledge/knowledge/meta-ads.md
+@~/.claude/nr-assistant/knowledge/knowledge/klaviyo.md
 </execution_context>
 
 <process>
@@ -26,10 +26,10 @@ Hurtig ugentlig rapport: data ind, indsigter ud, arkiveret automatisk.
 ## Trin 1: Identificer klient
 
 Hvis argument er angivet: brug det.
-Hvis argument er "all": list alle mapper i `~/agency-context/clients/` (ekskluder _template*) og koer for hver.
+Hvis argument er "all": list alle mapper i `~/.claude/nr-assistant/clients/` (ekskluder _template*) og koer for hver.
 Ellers: spoerg brugeren.
 
-Laes `~/agency-context/clients/[klient]/overview.md` for kontekst.
+Laes `~/.claude/nr-assistant/clients/[klient]/overview.md` for kontekst.
 
 ## Trin 2: Hent performance-data
 
@@ -52,7 +52,7 @@ Prompt til agent:
 "Analysér ugentlig Meta Ads performance for [klient].
 Kontekst: [indsaet overview.md + data fra trin 2]
 Levér: Executive summary (5 bullets), noegletalstabel, top 3 ads, 2-3 anbefalinger.
-Foelg format fra ~/agency-context/agency/agents/performance-analyst-meta.md"
+Foelg format fra ~/.claude/nr-assistant/knowledge/agents/performance-analyst-meta.md"
 ```
 
 ## Trin 4: Check Klaviyo (hvis relevant)
@@ -89,7 +89,7 @@ Saml agent-output til faerdig rapport:
 2. [handling 2]
 ```
 
-Gem som: `~/agency-context/clients/[klient]/weekly-[YYYY-WXX]-report.md`
+Gem som: `~/.claude/nr-assistant/clients/[klient]/weekly-[YYYY-WXX]-report.md`
 
 ## Trin 6: Trigger archiver
 
@@ -99,7 +99,7 @@ Spawn archiver agent via Task tool:
 Output-fil: [sti fra trin 5]
 Key metrics: { spend: X, roas_7d: X, roas_1d: X, purchases: X }
 Skill type: weekly
-Foelg ~/agency-context/agency/agents/archiver.md"
+Foelg ~/.claude/nr-assistant/knowledge/agents/archiver.md"
 ```
 
 ## Trin 7: Vis rapport
@@ -110,7 +110,7 @@ Informer om at fuld rapport er gemt i [sti].
 </process>
 
 <output>
-- `~/agency-context/clients/[klient]/weekly-[YYYY-WXX]-report.md` — fuld rapport
-- `~/agency-context/clients/[klient]/history.md` — opdateret via archiver
+- `~/.claude/nr-assistant/clients/[klient]/weekly-[YYYY-WXX]-report.md` — fuld rapport
+- `~/.claude/nr-assistant/clients/[klient]/history.md` — opdateret via archiver
 - Slack-venlig summary vist direkte i chat
 </output>

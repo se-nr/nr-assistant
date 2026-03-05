@@ -12,6 +12,6 @@ Kør `/elle:research` skill med det angivne klient-navn.
 2. Check NotebookLM auth + notebook library
 3. Kør 5 automatiske queries (value props, VoC+, VoC-, målgruppe, konkurrenter)
 4. Fallback til web research hvis ingen notebook
-5. Gem i `~/agency-context/clients/[klient]/context/research-sources.md`
+5. Gem i `~/.claude/nr-assistant/clients/[klient]/context/research-sources.md`
 
 Brug argument som klient-navn. Eksempel: `/research zizzi`

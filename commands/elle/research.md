@@ -15,9 +15,9 @@ author: Neble+Rohde <isidor@neble-rohde.dk>
 Automatisk research-fase via NotebookLM (primær) eller web (fallback).
 
 <execution_context>
-@~/agency-context/agency/process.md
-@~/agency-context/agency/knowledge/research-methodology.md
-@~/agency-context/clients/_research-sources-template.md
+@~/.claude/nr-assistant/knowledge/process.md
+@~/.claude/nr-assistant/knowledge/knowledge/research-methodology.md
+@~/.claude/nr-assistant/clients/_research-sources-template.md
 @~/.claude/skills/notebooklm/SKILL.md
 </execution_context>
 
@@ -31,7 +31,7 @@ Output er klar til brug uden manuelle mellemtrin.
 
 ## Trin 1: Indlæs klient-kontekst
 
-Læs `~/agency-context/clients/[klient]/overview.md` – hent:
+Læs `~/.claude/nr-assistant/clients/[klient]/overview.md` – hent:
 - Brand-navn og kategori
 - NotebookLM notebook URL (sektion 5, Marketing-setup)
 - Hvad der allerede er dokumenteret
@@ -129,7 +129,7 @@ Kør dette uanset om NotebookLM blev brugt — web research supplerer altid.
 **Agent-spawning (valgfrit):** Spawn `brand-market-research` agent via Task tool:
 ```
 "Lav web research for [klient]. Brand: [navn], Kategori: [kategori], Website: [URL]
-Følg ~/agency-context/agency/agents/brand-market-research.md
+Følg ~/.claude/nr-assistant/knowledge/agents/brand-market-research.md
 Levér: VoC (min 10 citater), konkurrenter (3-5), white space, sprogmønstre."
 ```
 
@@ -169,7 +169,7 @@ Alternativt kør manuelt med WebSearch/WebFetch:
 
 ## Trin 5: Gem output
 
-Udfyld `~/agency-context/clients/[klient]/context/research-sources.md` med alle fund:
+Udfyld `~/.claude/nr-assistant/clients/[klient]/context/research-sources.md` med alle fund:
 - NotebookLM notebook URL og hvad der er hentet
 - VoC-citater med kilde
 - Konkurrentlandskab
@@ -184,7 +184,7 @@ Er der noget vigtigt der mangler eller er forkert?"
 </process>
 
 <output>
-`~/agency-context/clients/[klient]/context/research-sources.md` – udfyldt med:
+`~/.claude/nr-assistant/clients/[klient]/context/research-sources.md` – udfyldt med:
 - NotebookLM notebook-reference
 - VoC-citater (min. 10)
 - Konkurrentlandskab (3-5)
