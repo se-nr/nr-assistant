@@ -161,7 +161,13 @@ Foelg ~/.claude/nr-assistant/knowledge/agents/archiver.md"
 
 Vis Executive Summary + Prioriteret Handlingsplan direkte i chat.
 Informer om at fuld rapport er gemt i [sti].
-Tilbyd: "Skal jeg lave kampagne-briefs for de hoejest prioriterede handlinger?"
+Naevn at brugeren kan koere `/elle:brief` for kampagne-briefs baseret paa handlingsplanen.
+
+## Exit
+
+Naar rapport er vist og archiver er spawnet: stop.
+Kald IKKE andre elle-commands automatisk. Spawn IKKE yderligere agents ud over archiver.
+Forslag om `/elle:brief` er kun information — brugeren starter det selv.
 
 </process>
 

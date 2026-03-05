@@ -40,3 +40,8 @@ Brug copywriting knowledge til at sikre:
 ## Output
 
 Gem som `~/.claude/nr-assistant/clients/[klient]/brief-[YYYY-MM-DD]-[kort-navn].md`
+
+## Exit
+
+Naar brief er gemt: vis summary og stop.
+Kald IKKE andre elle-commands automatisk.

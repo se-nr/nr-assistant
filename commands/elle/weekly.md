@@ -31,7 +31,21 @@ Ellers: spoerg brugeren.
 
 Laes `~/.claude/nr-assistant/clients/[klient]/overview.md` for kontekst.
 
-## Trin 2: Hent performance-data
+## Trin 2: Laes forrige uges rapport (history-context)
+
+Soeg efter seneste eksisterende ugerapport:
+```
+Glob: ~/.claude/nr-assistant/clients/[klient]/weekly-*-report.md
+```
+
+Hvis en eller flere rapporter findes:
+- Laes den nyeste (hoejeste uge-nummer)
+- Udtrak noegletal: spend, ROAS 7d, ROAS 1d, purchases
+- Gem som `previous_week` context til brug i Trin 5
+
+Hvis ingen rapporter findes: notér "Foerste ugerapport for denne klient" og fortsaet.
+
+## Trin 3: Hent performance-data
 
 Brug NR Agency MCP tools (ALDRIG beregn metrics manuelt):
 
@@ -43,7 +57,7 @@ Brug NR Agency MCP tools (ALDRIG beregn metrics manuelt):
 
 Hvis MCP ikke er tilgaengelig: spoerg brugeren om data.
 
-## Trin 3: Spawn performance-analyst agent
+## Trin 4: Spawn performance-analyst agent
 
 Brug Task tool til at spawne `performance-analyst-meta` agent:
 
@@ -55,13 +69,13 @@ Levér: Executive summary (5 bullets), noegletalstabel, top 3 ads, 2-3 anbefalin
 Foelg format fra ~/.claude/nr-assistant/knowledge/agents/performance-analyst-meta.md"
 ```
 
-## Trin 4: Check Klaviyo (hvis relevant)
+## Trin 5: Check Klaviyo (hvis relevant)
 
 Hvis klienten har Klaviyo (tjek overview.md):
 - Hent `get_campaign_report` for seneste uge via Klaviyo MCP
 - Tilfoej email-metrics til rapporten
 
-## Trin 5: Komponer rapport
+## Trin 6: Komponer rapport
 
 Saml agent-output til faerdig rapport:
 
@@ -70,6 +84,7 @@ Saml agent-output til faerdig rapport:
 
 ## Quick Summary
 - [5-7 bullets — Slack-venlig, copy-paste klar]
+- [Hvis previous_week findes: inkluder 1-2 bullets om vigtigste aendringer vs forrige rapport]
 
 ## Noegletal
 | Metric | Denne uge | Sidste uge | Aendring |
@@ -84,6 +99,14 @@ Saml agent-output til faerdig rapport:
 1. [ad-navn] — ROAS [X], spend [X]
 2. ...
 
+## Uge-over-uge (kun hvis previous_week data)
+| Metric | Forrige | Denne | Aendring | Trend |
+|--------|---------|-------|----------|-------|
+| Spend  | X       | X     | +/-X%    | op/ned/stabil |
+| ROAS 7d| X       | X     | +/-X%    | op/ned/stabil |
+
+Highlight: [1-2 saetninger om den vigtigste aendring og mulig aarsag]
+
 ## Anbefalinger
 1. [handling 1]
 2. [handling 2]
@@ -91,7 +114,7 @@ Saml agent-output til faerdig rapport:
 
 Gem som: `~/.claude/nr-assistant/clients/[klient]/weekly-[YYYY-WXX]-report.md`
 
-## Trin 6: Trigger archiver
+## Trin 7: Trigger archiver
 
 Spawn archiver agent via Task tool:
 ```
@@ -102,10 +125,15 @@ Skill type: weekly
 Foelg ~/.claude/nr-assistant/knowledge/agents/archiver.md"
 ```
 
-## Trin 7: Vis rapport
+## Trin 8: Vis rapport
 
 Vis Quick Summary-sektionen direkte til brugeren (Slack-klar).
 Informer om at fuld rapport er gemt i [sti].
+
+## Exit
+
+Naar Quick Summary er vist og archiver er spawnet: stop.
+Kald IKKE andre elle-commands. Spawn IKKE yderligere agents ud over archiver.
 
 </process>
 

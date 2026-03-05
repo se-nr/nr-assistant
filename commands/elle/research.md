@@ -181,6 +181,11 @@ CHECKPOINT: Vis opsummering:
 
 Er der noget vigtigt der mangler eller er forkert?"
 
+## Exit
+
+Naar research-sources.md er gemt og checkpoint er vist: stop.
+Kald IKKE andre elle-commands automatisk.
+
 </process>
 
 <output>

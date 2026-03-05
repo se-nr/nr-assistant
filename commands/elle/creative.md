@@ -55,3 +55,8 @@ Brug meta-ads.md knowledge til at sikre:
 ## Output
 
 Gem som `~/.claude/nr-assistant/clients/[klient]/creative-brief-[dato]-[kampagne].md`
+
+## Exit
+
+Naar creative brief er gemt: vis summary og stop.
+Kald IKKE andre elle-commands automatisk. Spawn IKKE yderligere agents ud over meta-ads-copywriter.

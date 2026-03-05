@@ -132,7 +132,13 @@ Opret mappen hvis den ikke findes.
 ## Trin 7: Vis rapport
 
 Vis hele discovery-rapporten direkte til brugeren.
-Tilbyd: "Skal jeg koere dybere research? (/elle:research [brand])"
+Naevn at brugeren kan koere `/elle:research [brand]` for dybere research.
+
+## Exit
+
+Naar rapport er vist: stop.
+Kald IKKE `/elle:research` eller andre elle-commands automatisk.
+Forslag er kun information — brugeren starter det selv.
 
 </process>
 

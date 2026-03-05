@@ -67,8 +67,13 @@ Gem rapport som `~/.claude/nr-assistant/clients/[klient]/monthly-[YYYY-MM]-repor
 
 ## Archiver
 
-Når rapporten er gemt, spawn archiver agent:
+Naar rapporten er gemt, spawn archiver agent:
 ```
-"Arkivér månedlig review for [klient]. Output: [sti]. Skill: review.
-Følg ~/.claude/nr-assistant/knowledge/agents/archiver.md"
+"Arkiver maanedlig review for [klient]. Output: [sti]. Skill: review.
+Foelg ~/.claude/nr-assistant/knowledge/agents/archiver.md"
 ```
+
+## Exit
+
+Naar rapport er gemt og archiver er spawnet: vis summary og stop.
+Kald IKKE andre elle-commands automatisk. Spawn IKKE yderligere agents ud over archiver + klaviyo-analyst.

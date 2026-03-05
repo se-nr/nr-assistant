@@ -43,9 +43,14 @@ Gem i `~/.claude/nr-assistant/clients/[klient-navn]/overview.md`
 
 ## Archiver
 
-Når onboarding er færdig, spawn archiver agent via Task tool:
+Naar onboarding er faerdig, spawn archiver agent via Task tool:
 ```
-"Arkivér onboarding for [klient]. Output: [sti til overview.md]. Skill: onboard.
+"Arkiver onboarding for [klient]. Output: [sti til overview.md]. Skill: onboard.
 Opret history.md med initial entry.
-Følg ~/.claude/nr-assistant/knowledge/agents/archiver.md"
+Foelg ~/.claude/nr-assistant/knowledge/agents/archiver.md"
 ```
+
+## Exit
+
+Naar overview.md er gemt og archiver er spawnet: vis summary og stop.
+Kald IKKE andre elle-commands automatisk.

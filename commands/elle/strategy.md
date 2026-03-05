@@ -285,10 +285,11 @@ Hvis brugeren har aendringer:
 - Gentag til godkendt
 
 ### 5b. Afledte outputs
-Naar strategien er godkendt, tilbyd:
-- "Skal jeg lave kampagne-briefs baseret paa strategien?" → `/elle:brief`
-- "Skal jeg opdatere klientens overview.md med den nye positionering?" → opdater overview
-- "Skal jeg lave en praesentation af strategien?" → document/presentation agent
+Naar strategien er godkendt, naevn mulige naeste skridt:
+- Brugeren kan koere `/elle:brief` for kampagne-briefs baseret paa strategien
+- Brugeren kan bede om at opdatere overview.md med ny positionering
+- Brugeren kan bede om en praesentation af strategien
+Kald IKKE disse commands automatisk — brugeren starter dem selv.
 
 ### 5c. Opdater klient-historik
 Tilfoej til `~/.claude/nr-assistant/clients/[klient]/history.md`:
@@ -312,3 +313,8 @@ Tilfoej til `~/.claude/nr-assistant/clients/[klient]/history.md`:
 4. **Begge attribution-vinduer** — al ROAS-data vises som 7d_click+1d_view OG 1d_click
 5. **Dansk sprog** — hele dokumentet skrives paa dansk medmindre andet aftales
 6. **Iterer hellere end at gaette** — hvis noget er uklart, spoerg i stedet for at antage
+
+## Exit
+
+Naar strategien er godkendt, arkiveret og historik opdateret: stop.
+Kald IKKE andre elle-commands automatisk. Spawn IKKE yderligere agents ud over archiver.
