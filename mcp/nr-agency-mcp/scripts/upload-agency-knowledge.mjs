@@ -50,10 +50,19 @@ async function main() {
     "N+R Research Framework – Brand & Market": readFileSync(`${agentDir}/brand-market-research.md`, "utf-8"),
   };
 
+  // Read marketing theory docs (markdown)
+  const docsDir = `${WORKSPACE}/docs`;
+  const theoryDocs = {
+    "Value Proposition Canvas": readFileSync(`${docsDir}/Value Proposition Canvas.md`, "utf-8"),
+    "Cialdini's 7 Principper for Influence": readFileSync(`${docsDir}/Cialdini - 7 Principles of Influence.md`, "utf-8"),
+    "Marketing Psychology & Mental Models": readFileSync(`${docsDir}/Marketing Psychology & Mental Models.md`, "utf-8"),
+  };
+
   const docs = [
     { title: "N+R Full Funnel Strategi (FP → IM → IP → EC)", content: fullFunnel },
     { title: "The Brand Lifecycle (4 Stages)", content: brandLifecycle },
     ...Object.entries(agents).map(([title, content]) => ({ title, content })),
+    ...Object.entries(theoryDocs).map(([title, content]) => ({ title, content })),
   ];
 
   let created = 0, updated = 0;
