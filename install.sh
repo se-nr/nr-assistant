@@ -107,13 +107,11 @@ python3 "$NR_DIR/scripts/update_mcp_config.py" "$CLAUDE_DESKTOP_CONFIG" "$MCP_EN
 step "4/4  Klient kontekst-database"
 
 if [ -d "$CONTEXT_DIR/.git" ]; then
-  ok "agency-context allerede tilgængeligt (git repo)"
+  ok "Klient-database fundet (~/agency-context)"
 elif [ -d "$CONTEXT_DIR" ]; then
-  ok "agency-context mappe fundet (ikke git-tracked)"
+  ok "Klient-database fundet (~/agency-context)"
 else
-  warn "~/agency-context ikke fundet"
-  info "Klon fra GitHub når I har oprettet repo:"
-  info "  git clone https://github.com/YOURORG/agency-context ~/agency-context"
+  info "Klient-database (~/agency-context) sættes op separat — spørg admin"
 fi
 
 # ─── Opsummering ──────────────────────────────────────────────────────────────
