@@ -375,8 +375,6 @@ export function createMcpServer(): McpServer {
             .in("title", [
               "N+R Full Funnel Strategi (FP → IM → IP → EC)",
               "The Brand Lifecycle (4 Stages)",
-              "Value Proposition Canvas",
-              "Cialdini's 7 Principper for Influence",
             ]);
           if (frameworks) agencyDocs = frameworks;
         }
@@ -410,7 +408,7 @@ export function createMcpServer(): McpServer {
       // Agency methodology first (so it frames the analysis)
       if (agencyDocs.length) {
         sections.push(`## N+R Metodik & Full Funnel Strategi\n`);
-        sections.push(`*Analysér ALTID performance efter funnel-stadie: FP (Awareness) → IM (In-Market) → IP (Retargeting) → EC (Retention). Brug Value Proposition Canvas til pains/gains og Cialdini til overtalelsesprincipper.*\n`);
+        sections.push(`*Analysér ALTID performance efter funnel-stadie: FP (Awareness) → IM (In-Market) → IP (Retargeting) → EC (Retention). Brug get_agency_knowledge for ekstra frameworks (VPC, Cialdini, analyse-metodik) når relevant.*\n`);
         for (const d of agencyDocs) {
           sections.push(`### ${d.title}`);
           sections.push(d.content);
@@ -442,7 +440,7 @@ export function createMcpServer(): McpServer {
     "get_agency_knowledge",
     "Hent N+R's samlede metodik: Full Funnel strategi (FP→IM→IP→EC), Brand Lifecycle, Value Proposition Canvas, Cialdini's 7 principper, marketing psykologi, analyse-frameworks (Meta, Google, Klaviyo), copy-frameworks (email, Meta, Google) og strategi-framework. Brug dette til at forstå HVORDAN N+R analyserer, positionerer brands og producerer content.",
     {
-      framework: z.enum(["all", "full-funnel", "brand-lifecycle", "value-proposition-canvas", "cialdini", "marketing-psychology", "meta-analysis", "google-analysis", "klaviyo-analysis", "brand-strategy", "email-copy", "meta-copy", "google-copy", "market-research"])
+      framework: z.enum(["all", "full-funnel", "brand-lifecycle", "value-proposition-canvas", "cialdini", "marketing-psychology", "performance-analysis", "meta-analysis", "google-analysis", "klaviyo-analysis", "brand-strategy", "email-copy", "meta-copy", "google-copy", "market-research"])
         .default("all")
         .describe("Specifikt framework (all = hele metodik)"),
     },
@@ -466,6 +464,7 @@ export function createMcpServer(): McpServer {
         "value-proposition-canvas": "Value Proposition Canvas",
         "cialdini": "Cialdini's 7 Principper for Influence",
         "marketing-psychology": "Marketing Psychology & Mental Models",
+        "performance-analysis": "N+R Performance Analysis Methodology",
         "meta-analysis": "N+R Analyse Framework – Meta Ads",
         "google-analysis": "N+R Analyse Framework – Google Ads",
         "klaviyo-analysis": "N+R Analyse Framework – Klaviyo",

@@ -56,6 +56,7 @@ async function main() {
     "Value Proposition Canvas": readFileSync(`${docsDir}/Value Proposition Canvas.md`, "utf-8"),
     "Cialdini's 7 Principper for Influence": readFileSync(`${docsDir}/Cialdini - 7 Principles of Influence.md`, "utf-8"),
     "Marketing Psychology & Mental Models": readFileSync(`${docsDir}/Marketing Psychology & Mental Models.md`, "utf-8"),
+    "N+R Performance Analysis Methodology": readFileSync(`${docsDir}/Performance Analysis Methodology.md`, "utf-8"),
   };
 
   const docs = [
