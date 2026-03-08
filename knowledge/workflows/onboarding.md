@@ -6,7 +6,7 @@ Guided onboarding af ny klient. Output: udfyldt clients/[navn]/overview.md klar 
 
 <required_reading>
 @~/.claude/nr-assistant/knowledge/process.md
-@~/.claude/nr-assistant/clients/_template.md
+@~/.claude/nr-assistant/knowledge/_template.md
 </required_reading>
 
 <philosophy>

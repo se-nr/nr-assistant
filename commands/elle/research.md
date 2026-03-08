@@ -18,7 +18,6 @@ Automatisk research-fase via NotebookLM (primær) eller web (fallback).
 @~/.claude/nr-assistant/knowledge/process.md
 @~/.claude/nr-assistant/knowledge/knowledge/research-methodology.md
 @~/.claude/nr-assistant/clients/_research-sources-template.md
-@~/.claude/skills/notebooklm/SKILL.md
 </execution_context>
 
 <philosophy>
