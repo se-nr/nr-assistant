@@ -50,8 +50,8 @@ const TIME_RANGE_DESC = "Tidsperiode. Presets: last_7d, last_30d, last_90d, this
 export function createMcpServer(): McpServer {
   const server = new McpServer({
     name: "nr-agency",
-    version: "1.1.0",
-    description: "Neble+Rohde performance marketing MCP. 51 tools til Meta Ads, Klaviyo, Google Ads, Shopify og lead-analyse. Alle data fra Supabase. Start med get_clients. Klaviyo ANALYSE: get_klaviyo_stored_campaigns/stored_flows/monthly (Supabase). Meta: get_performance. Google: get_google_*.",
+    version: "2.0.0",
+    description: "Neble+Rohde performance marketing MCP. 66 tools til Meta Ads, Klaviyo, Google Ads, Shopify, lead-analyse, cross-channel og rapporter. Alle data fra Supabase. Start med get_clients. Klaviyo ANALYSE: get_klaviyo_stored_campaigns/stored_flows/monthly. Meta: get_performance. Google: get_google_*. Rapporter: read_client_report.",
   });
 
   // ─── MCP Prompt: agency guide ────────────────────────────────────────────────
@@ -82,10 +82,11 @@ KLIENT: get_clients, get_brand_context, get_client_documents, get_agency_knowled
 META ADS: get_performance, get_campaigns, get_campaign_details, get_ad_sets, get_top_ads, get_creatives, get_ad_details, get_ad_image, get_daily_trend, get_country_breakdown, get_demographic_breakdown, get_age_gender_breakdown, get_placement_breakdown, get_hourly_data, compare_periods
 KLAVIYO (analyse/Supabase): get_klaviyo_stored_campaigns, get_klaviyo_stored_flows, get_klaviyo_monthly, get_klaviyo_campaign_content
 KLAVIYO (real-time/API): get_klaviyo_overview, get_klaviyo_flows, get_klaviyo_campaigns, get_klaviyo_revenue, get_klaviyo_lists, get_klaviyo_segments, get_klaviyo_metrics, get_klaviyo_health
-GOOGLE: get_google_performance, get_google_campaigns, get_google_keywords, get_google_search_terms
-LEADS/ECOM: get_leads, get_lead_cohorts, get_lead_orders, get_shopify_revenue
-OVERBLIK: get_channel_overview, get_cross_client_overview, compare_periods
-ADMIN: trigger_sync, trigger_backfill, create_client, save_client_document
+GOOGLE: get_google_performance, get_google_campaigns, get_google_keywords, get_google_search_terms, get_google_shopping, get_google_geo, get_google_ad_groups, get_google_assets, get_google_monthly_comparison
+LEADS/ECOM: get_leads, get_lead_cohorts, get_lead_orders, get_lead_campaign_breakdown, get_lead_unmatched, get_shopify_revenue
+OVERBLIK: get_channel_overview, get_cross_client_overview, get_cross_channel, get_monthly_insights, compare_periods
+RAPPORTER: read_client_report, list_client_reports, generate_ai_review
+ADMIN: trigger_sync, trigger_backfill, trigger_source_sync, trigger_thumbnail_refresh, check_data_source_health, create_client, connect_google_ads, save_client_document
 
 ## Workflows
 "Hvordan performer X?" → get_clients → get_performance + get_klaviyo_monthly + get_google_performance
@@ -3681,6 +3682,803 @@ ${script}
         ];
 
         return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(e.message);
+      }
+    }
+  );
+
+  // ─── Tool: read_client_report ─────────────────────────────────────────────
+
+  server.tool(
+    "read_client_report",
+    "Læs en rapport-fil fra Supabase Storage (client-reports bucket). Filer er markdown-rapporter gemt som f.eks. 'client-reports/{klient}/rapport-navn.md'. Brug list_client_reports for at se tilgængelige filer.",
+    {
+      path: z.string().describe("Fuld sti i bucketen, f.eks. 'i-love-beauty/klaviyo-analyse-jan2025-mar2026.md'"),
+    },
+    async ({ path }) => {
+      try {
+        const sb = getSupabase();
+        const { data, error } = await sb.storage.from("client-reports").download(path);
+        if (error) return err(`Kunne ikke hente fil: ${error.message}`);
+        const content = await data.text();
+        return text(content);
+      } catch (e: any) {
+        return err(e.message);
+      }
+    }
+  );
+
+  // ─── Tool: list_client_reports ──────────────────────────────────────────────
+
+  server.tool(
+    "list_client_reports",
+    "List rapport-filer i Supabase Storage (client-reports bucket). Angiv en klient-mappe for at se filer, eller udelad for at se alle mapper.",
+    {
+      folder: z.string().optional().describe("Mappe-sti, f.eks. 'i-love-beauty'. Udelad for at liste rodmapper."),
+    },
+    async ({ folder }) => {
+      try {
+        const sb = getSupabase();
+        const { data, error } = await sb.storage.from("client-reports").list(folder || "", { limit: 100, sortBy: { column: "name", order: "asc" } });
+        if (error) return err(`Kunne ikke liste filer: ${error.message}`);
+        if (!data?.length) return text(`Ingen filer i ${folder || "client-reports/"}`);
+
+        const lines = [
+          `## Filer i client-reports/${folder || ""}`,
+          ``,
+          `| Navn | Type | Størrelse | Opdateret |`,
+          `|------|------|-----------|-----------|`,
+          ...data.map((f: any) => {
+            const isFolder = !f.id;
+            const size = f.metadata?.size ? `${Math.round(f.metadata.size / 1024)} KB` : "–";
+            const updated = f.updated_at ? new Date(f.updated_at).toISOString().split("T")[0] : "–";
+            return `| ${f.name} | ${isFolder ? "📁 Mappe" : "📄 Fil"} | ${size} | ${updated} |`;
+          }),
+        ];
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(e.message);
+      }
+    }
+  );
+
+  // ─── Tool: get_google_shopping ──────────────────────────────────────────────
+
+  server.tool(
+    "get_google_shopping",
+    "Hent Google Shopping produkt-performance (spend, clicks, ROAS) fra google_shopping_insights-tabellen",
+    {
+      client_name: z.string().describe("Klientens navn"),
+      time_range: z.string().default("last_30d").describe(TIME_RANGE_DESC),
+      brand: z.string().optional().describe("Filtrer på brand"),
+      category: z.string().optional().describe("Filtrer på produktkategori (level 1)"),
+    },
+    async ({ client_name, time_range, brand, category }) => {
+      const sb = getSupabase();
+      const client = await findClient(sb, client_name);
+      if (!client) return noClient(client_name);
+      const { since, until } = resolveDateRange(time_range);
+
+      let query = sb
+        .from("google_shopping_insights")
+        .select("product_item_id, product_title, product_brand, product_type_l1, impressions, clicks, spend, conversions, conversions_value")
+        .eq("client_id", client.id)
+        .gte("date", since)
+        .lte("date", until);
+
+      if (brand) query = query.ilike("product_brand", `%${brand}%`);
+      if (category) query = query.ilike("product_type_l1", `%${category}%`);
+
+      const { data, error } = await query;
+      if (error) return err(error.message);
+      if (!data?.length) return noData(client.name, "Google Shopping");
+
+      // Aggregate by product
+      const prodMap = new Map<string, { title: string; brand: string; cat: string; spend: number; impr: number; clicks: number; conv: number; rev: number }>();
+      for (const r of data) {
+        const key = r.product_item_id || r.product_title || "unknown";
+        const ex = prodMap.get(key) || { title: r.product_title || key, brand: r.product_brand || "–", cat: r.product_type_l1 || "–", spend: 0, impr: 0, clicks: 0, conv: 0, rev: 0 };
+        ex.spend += Number(r.spend || 0);
+        ex.impr += Number(r.impressions || 0);
+        ex.clicks += Number(r.clicks || 0);
+        ex.conv += Number(r.conversions || 0);
+        ex.rev += Number(r.conversions_value || 0);
+        prodMap.set(key, ex);
+      }
+
+      const sorted = [...prodMap.values()].sort((a, b) => b.spend - a.spend).slice(0, 30);
+      const totalSpend = sorted.reduce((s, p) => s + p.spend, 0);
+      const totalRev = sorted.reduce((s, p) => s + p.rev, 0);
+
+      const lines = [
+        `## ${client.name} – Google Shopping (${time_range})`,
+        `Total spend: ${formatCurrency(totalSpend)} | Revenue: ${formatCurrency(totalRev)} | ROAS: ${totalSpend > 0 ? (totalRev / totalSpend).toFixed(2) : "–"}x`,
+        ``,
+        `| Produkt | Brand | Spend | ROAS | Conv. | Clicks | CTR |`,
+        `|---------|-------|-------|------|-------|--------|-----|`,
+        ...sorted.map(p => {
+          const roas = p.spend > 0 ? (p.rev / p.spend).toFixed(2) + "x" : "–";
+          const ctr = p.impr > 0 ? ((p.clicks / p.impr) * 100).toFixed(2) + "%" : "–";
+          return `| ${p.title.slice(0, 40)} | ${p.brand} | ${formatCurrency(p.spend)} | ${roas} | ${Math.round(p.conv)} | ${formatNum(p.clicks)} | ${ctr} |`;
+        }),
+      ];
+      return text(lines.join("\n"));
+    }
+  );
+
+  // ─── Tool: get_google_geo ──────────────────────────────────────────────────
+
+  server.tool(
+    "get_google_geo",
+    "Hent Google Ads geografisk performance pr. land fra google_geo_insights-tabellen",
+    {
+      client_name: z.string().describe("Klientens navn"),
+      time_range: z.string().default("last_30d").describe(TIME_RANGE_DESC),
+    },
+    async ({ client_name, time_range }) => {
+      const sb = getSupabase();
+      const client = await findClient(sb, client_name);
+      if (!client) return noClient(client_name);
+      const { since, until } = resolveDateRange(time_range);
+
+      const { data, error } = await sb
+        .from("google_geo_insights")
+        .select("country_code, impressions, clicks, spend, conversions, conversions_value")
+        .eq("client_id", client.id)
+        .gte("date", since)
+        .lte("date", until);
+
+      if (error) return err(error.message);
+      if (!data?.length) return noData(client.name, "Google Ads geo");
+
+      // Aggregate by country
+      const countryMap = new Map<string, { spend: number; impr: number; clicks: number; conv: number; rev: number }>();
+      for (const r of data) {
+        const key = r.country_code || "??";
+        const ex = countryMap.get(key) || { spend: 0, impr: 0, clicks: 0, conv: 0, rev: 0 };
+        ex.spend += Number(r.spend || 0);
+        ex.impr += Number(r.impressions || 0);
+        ex.clicks += Number(r.clicks || 0);
+        ex.conv += Number(r.conversions || 0);
+        ex.rev += Number(r.conversions_value || 0);
+        countryMap.set(key, ex);
+      }
+
+      const sorted = [...countryMap.entries()].sort((a, b) => b[1].spend - a[1].spend);
+      const totalSpend = sorted.reduce((s, [, v]) => s + v.spend, 0);
+
+      const lines = [
+        `## ${client.name} – Google Ads Geo (${time_range})`,
+        `${sorted.length} lande, total spend: ${formatCurrency(totalSpend)}`,
+        ``,
+        `| Land | Spend | Andel | ROAS | Conv. | CPA | CTR |`,
+        `|------|-------|-------|------|-------|-----|-----|`,
+        ...sorted.slice(0, 25).map(([code, v]) => {
+          const roas = v.spend > 0 ? (v.rev / v.spend).toFixed(2) + "x" : "–";
+          const cpa = v.conv > 0 ? formatCurrency(v.spend / v.conv) : "–";
+          const ctr = v.impr > 0 ? ((v.clicks / v.impr) * 100).toFixed(2) + "%" : "–";
+          const share = totalSpend > 0 ? ((v.spend / totalSpend) * 100).toFixed(1) + "%" : "–";
+          return `| ${code} | ${formatCurrency(v.spend)} | ${share} | ${roas} | ${Math.round(v.conv)} | ${cpa} | ${ctr} |`;
+        }),
+      ];
+      return text(lines.join("\n"));
+    }
+  );
+
+  // ─── Tool: get_google_ad_groups ────────────────────────────────────────────
+
+  server.tool(
+    "get_google_ad_groups",
+    "Hent Google Ads ad group performance med spend, ROAS, conversions. Kan filtreres per kampagne.",
+    {
+      client_name: z.string().describe("Klientens navn"),
+      time_range: z.string().default("last_30d").describe(TIME_RANGE_DESC),
+      campaign_name: z.string().optional().describe("Filtrer på kampagnenavn (fuzzy match)"),
+    },
+    async ({ client_name, time_range, campaign_name }) => {
+      const sb = getSupabase();
+      const client = await findClient(sb, client_name);
+      if (!client) return noClient(client_name);
+      const { since, until } = resolveDateRange(time_range);
+
+      // Get ad sets (= ad groups in Google) for this client
+      let adSetQuery = sb
+        .from("ad_sets")
+        .select("id, name, status, campaign_id, platform_adset_id")
+        .eq("client_id", client.id)
+        .eq("source", "google_ads");
+
+      const { data: adSets, error: asErr } = await adSetQuery;
+      if (asErr) return err(asErr.message);
+      if (!adSets?.length) return text(`Ingen Google Ads ad groups fundet for ${client.name}`);
+
+      // Get campaigns for name lookup + optional filter
+      const { data: campaigns } = await sb
+        .from("campaigns")
+        .select("id, name")
+        .eq("client_id", client.id)
+        .eq("source", "google_ads");
+
+      const campNameMap = new Map((campaigns || []).map((c: any) => [c.id, c.name]));
+
+      // Filter by campaign name if provided
+      let filteredAdSets = adSets;
+      if (campaign_name) {
+        const matchingCampIds = new Set(
+          (campaigns || []).filter((c: any) => c.name.toLowerCase().includes(campaign_name.toLowerCase())).map((c: any) => c.id)
+        );
+        filteredAdSets = adSets.filter((as: any) => matchingCampIds.has(as.campaign_id));
+        if (!filteredAdSets.length) return text(`Ingen ad groups matcher kampagne "${campaign_name}"`);
+      }
+
+      // Get insights
+      const { data: insights } = await sb
+        .from("insights")
+        .select("adset_id, spend, impressions, clicks, purchases, purchase_value")
+        .eq("client_id", client.id)
+        .eq("source", "google_ads")
+        .gte("date", since)
+        .lte("date", until);
+
+      // Aggregate per ad_set
+      const asMetrics = new Map<string, { spend: number; impr: number; clicks: number; conv: number; rev: number }>();
+      for (const r of insights || []) {
+        if (!r.adset_id) continue;
+        const ex = asMetrics.get(r.adset_id) || { spend: 0, impr: 0, clicks: 0, conv: 0, rev: 0 };
+        ex.spend += Number(r.spend || 0);
+        ex.impr += Number(r.impressions || 0);
+        ex.clicks += Number(r.clicks || 0);
+        ex.conv += Number(r.purchases || 0);
+        ex.rev += Number(r.purchase_value || 0);
+        asMetrics.set(r.adset_id, ex);
+      }
+
+      const withSpend = filteredAdSets.filter((as: any) => {
+        const m = asMetrics.get(as.id);
+        return m && m.spend > 0;
+      }).sort((a: any, b: any) => {
+        const ma = asMetrics.get(a.id);
+        const mb = asMetrics.get(b.id);
+        return (mb?.spend || 0) - (ma?.spend || 0);
+      });
+
+      const lines = [
+        `## ${client.name} – Google Ads Ad Groups (${time_range})`,
+        `${withSpend.length} ad groups med spend`,
+        ``,
+        `| Ad Group | Kampagne | Spend | ROAS | Conv. | CPA | CTR |`,
+        `|----------|----------|-------|------|-------|-----|-----|`,
+        ...withSpend.slice(0, 30).map((as: any) => {
+          const m = asMetrics.get(as.id)!;
+          const roas = m.spend > 0 ? (m.rev / m.spend).toFixed(2) + "x" : "–";
+          const cpa = m.conv > 0 ? formatCurrency(m.spend / m.conv) : "–";
+          const ctr = m.impr > 0 ? ((m.clicks / m.impr) * 100).toFixed(2) + "%" : "–";
+          const campName = campNameMap.get(as.campaign_id) || "–";
+          return `| ${as.name} | ${campName.slice(0, 25)} | ${formatCurrency(m.spend)} | ${roas} | ${Math.round(m.conv)} | ${cpa} | ${ctr} |`;
+        }),
+      ];
+      return text(lines.join("\n"));
+    }
+  );
+
+  // ─── Tool: get_google_assets ───────────────────────────────────────────────
+
+  server.tool(
+    "get_google_assets",
+    "Hent Google Ads Performance Max asset groups og assets. Viser grupper med performance-score og tilknyttede assets.",
+    {
+      client_name: z.string().describe("Klientens navn"),
+      campaign_name: z.string().optional().describe("Filtrer på PMax kampagnenavn"),
+    },
+    async ({ client_name, campaign_name }) => {
+      const sb = getSupabase();
+      const client = await findClient(sb, client_name);
+      if (!client) return noClient(client_name);
+
+      // Get asset groups
+      let groupsQuery = sb
+        .from("google_asset_groups")
+        .select("*")
+        .eq("client_id", client.id)
+        .neq("status", "REMOVED");
+
+      const { data: groups, error: gErr } = await groupsQuery;
+      if (gErr) return err(gErr.message);
+      if (!groups?.length) return text(`Ingen PMax asset groups fundet for ${client.name}`);
+
+      // Get campaigns for name lookup
+      const campIds = [...new Set(groups.map((g: any) => g.campaign_id).filter(Boolean))];
+      let campNameMap = new Map<string, string>();
+      if (campIds.length) {
+        const { data: campaigns } = await sb.from("campaigns").select("id, name").in("id", campIds);
+        campNameMap = new Map((campaigns || []).map((c: any) => [c.id, c.name]));
+      }
+
+      // Optional filter
+      let filtered = groups;
+      if (campaign_name) {
+        const matchIds = new Set([...campNameMap.entries()].filter(([, n]) => n.toLowerCase().includes(campaign_name.toLowerCase())).map(([id]) => id));
+        filtered = groups.filter((g: any) => matchIds.has(g.campaign_id));
+      }
+
+      // Get assets
+      const { data: assets } = await sb
+        .from("google_assets")
+        .select("asset_group_id, asset_type, field_type, performance_label, text_content, url")
+        .eq("client_id", client.id)
+        .neq("status", "REMOVED");
+
+      const assetsByGroup = new Map<string, any[]>();
+      for (const a of assets || []) {
+        const list = assetsByGroup.get(a.asset_group_id) || [];
+        list.push(a);
+        assetsByGroup.set(a.asset_group_id, list);
+      }
+
+      const lines = [
+        `## ${client.name} – PMax Asset Groups`,
+        `${filtered.length} grupper`,
+        ``,
+      ];
+
+      for (const g of filtered.slice(0, 15)) {
+        const campName = campNameMap.get(g.campaign_id) || "–";
+        lines.push(`### ${g.name} (${g.status})`);
+        lines.push(`Kampagne: ${campName} | Performance: ${g.ad_strength || "–"}`);
+
+        const groupAssets = assetsByGroup.get(g.id) || [];
+        if (groupAssets.length) {
+          const byType = new Map<string, number>();
+          for (const a of groupAssets) byType.set(a.field_type || a.asset_type || "?", (byType.get(a.field_type || a.asset_type || "?") || 0) + 1);
+          lines.push(`Assets: ${[...byType.entries()].map(([t, c]) => `${t}: ${c}`).join(", ")}`);
+        }
+        lines.push(``);
+      }
+
+      return text(lines.join("\n"));
+    }
+  );
+
+  // ─── Tool: get_google_monthly_comparison ───────────────────────────────────
+
+  server.tool(
+    "get_google_monthly_comparison",
+    "MoM og YoY sammenligning af Google Ads performance. Viser aktuel, forrige måned og samme måned sidste år.",
+    {
+      client_name: z.string().describe("Klientens navn"),
+      month: z.string().default("").describe("Måned som 'YYYY-MM' (f.eks. '2026-02'). Tom = indeværende måned."),
+      segment: z.enum(["all", "search", "shopping", "pmax", "display", "video", "demand_gen"]).default("all").describe("Kampagnetype-segment"),
+    },
+    async ({ client_name, month, segment }) => {
+      const sb = getSupabase();
+      const client = await findClient(sb, client_name);
+      if (!client) return noClient(client_name);
+
+      // Resolve month
+      const now = new Date();
+      const currentMonth = month || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+      const [year, mon] = currentMonth.split("-").map(Number);
+
+      // Period dates
+      const curStart = `${currentMonth}-01`;
+      const curEnd = new Date(year, mon, 0).toISOString().split("T")[0];
+      const prevDate = new Date(year, mon - 2, 1);
+      const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}`;
+      const prevStart = `${prevMonth}-01`;
+      const prevEnd = new Date(prevDate.getFullYear(), prevDate.getMonth() + 1, 0).toISOString().split("T")[0];
+      const yoyMonth = `${year - 1}-${String(mon).padStart(2, "0")}`;
+      const yoyStart = `${yoyMonth}-01`;
+      const yoyEnd = new Date(year - 1, mon, 0).toISOString().split("T")[0];
+
+      // Campaign type map (for segment filtering)
+      const SEGMENT_TYPES: Record<string, string[]> = {
+        search: ["2"], shopping: ["4"], pmax: ["10"], display: ["3"], video: ["6"], demand_gen: ["12", "14"],
+      };
+
+      // Get campaign IDs for segment filter
+      let campaignIdFilter: string[] | null = null;
+      if (segment !== "all") {
+        const types = SEGMENT_TYPES[segment] || [];
+        const { data: camps } = await sb
+          .from("campaigns")
+          .select("id, objective")
+          .eq("client_id", client.id)
+          .eq("source", "google_ads")
+          .in("objective", types);
+        campaignIdFilter = (camps || []).map((c: any) => c.id);
+        if (!campaignIdFilter.length) return text(`Ingen ${segment} kampagner fundet for ${client.name}`);
+      }
+
+      // Fetch all three periods
+      const cid = client!.id;
+      async function fetchPeriod(start: string, end: string) {
+        let q = sb
+          .from("insights")
+          .select("spend, impressions, clicks, purchases, purchase_value")
+          .eq("client_id", cid)
+          .eq("source", "google_ads")
+          .gte("date", start)
+          .lte("date", end);
+        if (campaignIdFilter) q = q.in("campaign_id", campaignIdFilter);
+        const { data } = await q;
+        const agg = { spend: 0, impr: 0, clicks: 0, conv: 0, rev: 0 };
+        for (const r of data || []) {
+          agg.spend += Number(r.spend || 0);
+          agg.impr += Number(r.impressions || 0);
+          agg.clicks += Number(r.clicks || 0);
+          agg.conv += Number(r.purchases || 0);
+          agg.rev += Number(r.purchase_value || 0);
+        }
+        return agg;
+      }
+
+      const [cur, prev, yoy] = await Promise.all([
+        fetchPeriod(curStart, curEnd),
+        fetchPeriod(prevStart, prevEnd),
+        fetchPeriod(yoyStart, yoyEnd),
+      ]);
+
+      function pctChange(a: number, b: number): string {
+        if (b === 0) return a > 0 ? "+∞" : "–";
+        const pct = ((a - b) / b) * 100;
+        return (pct >= 0 ? "+" : "") + pct.toFixed(1) + "%";
+      }
+
+      const lines = [
+        `## ${client.name} – Google Ads MoM/YoY (${segment})`,
+        `Periode: ${currentMonth}`,
+        ``,
+        `| Metrik | ${currentMonth} | ${prevMonth} (MoM) | ${yoyMonth} (YoY) |`,
+        `|--------|------------|------------|------------|`,
+        `| Spend | ${formatCurrency(cur.spend)} | ${formatCurrency(prev.spend)} (${pctChange(cur.spend, prev.spend)}) | ${formatCurrency(yoy.spend)} (${pctChange(cur.spend, yoy.spend)}) |`,
+        `| ROAS | ${cur.spend > 0 ? (cur.rev / cur.spend).toFixed(2) + "x" : "–"} | ${prev.spend > 0 ? (prev.rev / prev.spend).toFixed(2) + "x" : "–"} | ${yoy.spend > 0 ? (yoy.rev / yoy.spend).toFixed(2) + "x" : "–"} |`,
+        `| Conversions | ${Math.round(cur.conv)} | ${Math.round(prev.conv)} (${pctChange(cur.conv, prev.conv)}) | ${Math.round(yoy.conv)} (${pctChange(cur.conv, yoy.conv)}) |`,
+        `| Revenue | ${formatCurrency(cur.rev)} | ${formatCurrency(prev.rev)} (${pctChange(cur.rev, prev.rev)}) | ${formatCurrency(yoy.rev)} (${pctChange(cur.rev, yoy.rev)}) |`,
+        `| Clicks | ${formatNum(cur.clicks)} | ${formatNum(prev.clicks)} (${pctChange(cur.clicks, prev.clicks)}) | ${formatNum(yoy.clicks)} (${pctChange(cur.clicks, yoy.clicks)}) |`,
+        `| Impressions | ${formatNum(cur.impr)} | ${formatNum(prev.impr)} (${pctChange(cur.impr, prev.impr)}) | ${formatNum(yoy.impr)} (${pctChange(cur.impr, yoy.impr)}) |`,
+        `| CPA | ${cur.conv > 0 ? formatCurrency(cur.spend / cur.conv) : "–"} | ${prev.conv > 0 ? formatCurrency(prev.spend / prev.conv) : "–"} | ${yoy.conv > 0 ? formatCurrency(yoy.spend / yoy.conv) : "–"} |`,
+      ];
+      return text(lines.join("\n"));
+    }
+  );
+
+  // ─── Tool: get_lead_campaign_breakdown ─────────────────────────────────────
+
+  server.tool(
+    "get_lead_campaign_breakdown",
+    "Hent lead-kampagne breakdown med ROAS, leads, revenue og konverteringsdata pr. kampagne/ad set. Understøtter country filter.",
+    {
+      client_name: z.string().describe("Klientens navn"),
+      time_range: z.string().default("last_90d").describe(TIME_RANGE_DESC),
+      country: z.string().optional().describe("Filtrer på landekode (f.eks. 'DK', 'NO')"),
+    },
+    async ({ client_name, time_range, country }) => {
+      try {
+        const sb = getSupabase();
+        const client = await findClient(sb, client_name);
+        if (!client) return noClient(client_name);
+        const { since, until } = resolveDateRange(time_range);
+
+        const params: Record<string, string | number | undefined> = {
+          clientId: client.id,
+          from: since,
+          to: until,
+        };
+        if (country) params.country = country;
+
+        const data = await dashboardFetch<any>("/api/lead-cohorts/campaign-breakdown", params);
+
+        if (!data?.campaigns?.length) return noData(client.name, "lead campaign breakdown");
+
+        const lines = [
+          `## ${client.name} – Lead Campaign Breakdown (${time_range})`,
+          country ? `Land: ${country}` : "",
+          ``,
+          `| Kampagne | Leads | Spend | 30D Rev | 90D Rev | 30D ROAS | 90D ROAS |`,
+          `|----------|-------|-------|---------|---------|----------|----------|`,
+          ...data.campaigns.slice(0, 25).map((c: any) => {
+            return `| ${(c.campaignName || "–").slice(0, 35)} | ${c.leads || 0} | ${formatCurrency(c.adSpend || 0)} | ${formatCurrency(c.revenue30d || 0)} | ${formatCurrency(c.revenue90d || 0)} | ${c.adSpend > 0 ? ((c.revenue30d || 0) / c.adSpend).toFixed(2) + "x" : "–"} | ${c.adSpend > 0 ? ((c.revenue90d || 0) / c.adSpend).toFixed(2) + "x" : "–"} |`;
+          }),
+        ].filter(Boolean);
+
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(e.message);
+      }
+    }
+  );
+
+  // ─── Tool: get_lead_unmatched ──────────────────────────────────────────────
+
+  server.tool(
+    "get_lead_unmatched",
+    "Hent leads der ikke er matchet til en ordre endnu (unmatched leads). Viser konverteringspotentiale.",
+    {
+      client_name: z.string().describe("Klientens navn"),
+      time_range: z.string().default("last_90d").describe(TIME_RANGE_DESC),
+      country: z.string().optional().describe("Filtrer på landekode"),
+    },
+    async ({ client_name, time_range, country }) => {
+      try {
+        const sb = getSupabase();
+        const client = await findClient(sb, client_name);
+        if (!client) return noClient(client_name);
+        const { since, until } = resolveDateRange(time_range);
+
+        const params: Record<string, string | number | undefined> = {
+          clientId: client.id,
+          from: since,
+          to: until,
+        };
+        if (country) params.country = country;
+
+        const data = await dashboardFetch<any>("/api/lead-cohorts/unmatched", params);
+
+        if (!data?.unmatched?.length) return text(`Ingen umatchede leads for ${client.name} i perioden.`);
+
+        const lines = [
+          `## ${client.name} – Umatchede Leads (${time_range})`,
+          `${data.unmatched.length} lead ads uden ordrematch`,
+          ``,
+          `| Ad | Leads | Spend | Campaign | Country |`,
+          `|-----|-------|-------|----------|---------|`,
+          ...data.unmatched.slice(0, 25).map((u: any) => {
+            return `| ${(u.adName || "–").slice(0, 30)} | ${u.leads || 0} | ${formatCurrency(u.spend || 0)} | ${(u.campaignName || "–").slice(0, 25)} | ${u.country || "–"} |`;
+          }),
+        ];
+
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(e.message);
+      }
+    }
+  );
+
+  // ─── Tool: get_cross_channel ───────────────────────────────────────────────
+
+  server.tool(
+    "get_cross_channel",
+    "Cross-channel overblik: Meta + Google Ads side om side med daglig sammenligning. Viser spend, ROAS, conversions for begge kanaler.",
+    {
+      client_name: z.string().describe("Klientens navn"),
+      time_range: z.string().default("last_30d").describe(TIME_RANGE_DESC),
+    },
+    async ({ client_name, time_range }) => {
+      try {
+        const sb = getSupabase();
+        const client = await findClient(sb, client_name);
+        if (!client) return noClient(client_name);
+        const { since, until } = resolveDateRange(time_range);
+
+        const data = await dashboardFetch<any>("/api/dashboard/cross-channel", {
+          clientId: client.id,
+          from: since,
+          to: until,
+        });
+
+        const lines = [
+          `## ${client.name} – Cross-Channel (${time_range})`,
+          ``,
+        ];
+
+        if (data.meta) {
+          const m = data.meta;
+          lines.push(`### Meta Ads`);
+          lines.push(`Spend: ${formatCurrency(m.spend)} | ROAS: ${m.roas?.toFixed(2) || "–"}x | Conv: ${Math.round(m.purchases || 0)} | CPA: ${m.purchases > 0 ? formatCurrency(m.spend / m.purchases) : "–"}`);
+        }
+        if (data.google) {
+          const g = data.google;
+          lines.push(`### Google Ads`);
+          lines.push(`Spend: ${formatCurrency(g.spend)} | ROAS: ${g.roas?.toFixed(2) || "–"}x | Conv: ${Math.round(g.purchases || 0)} | CPA: ${g.purchases > 0 ? formatCurrency(g.spend / g.purchases) : "–"}`);
+        }
+
+        if (data.combined) {
+          lines.push(`### Samlet`);
+          lines.push(`Total spend: ${formatCurrency(data.combined.spend)} | Impressions: ${formatNum(data.combined.impressions)} | Clicks: ${formatNum(data.combined.clicks)}`);
+          lines.push(`*NB: Conversions kan overlappe mellem kanaler*`);
+        }
+
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(e.message);
+      }
+    }
+  );
+
+  // ─── Tool: get_monthly_insights ────────────────────────────────────────────
+
+  server.tool(
+    "get_monthly_insights",
+    "12-måneders performance trend + YTD sammenligning (i år vs. sidste år). Viser spend, revenue, ROAS, purchases pr. måned.",
+    {
+      client_name: z.string().describe("Klientens navn"),
+    },
+    async ({ client_name }) => {
+      try {
+        const sb = getSupabase();
+        const client = await findClient(sb, client_name);
+        if (!client) return noClient(client_name);
+
+        const data = await dashboardFetch<any>("/api/dashboard/monthly-insights", {
+          clientId: client.id,
+        });
+
+        if (!data?.months?.length) return noData(client.name, "monthly insights");
+
+        const lines = [
+          `## ${client.name} – 12 Måneder Trend`,
+          ``,
+          `| Måned | Spend | Revenue | ROAS | Purchases |`,
+          `|-------|-------|---------|------|-----------|`,
+          ...data.months.map((m: any) => {
+            const roas = m.spend > 0 ? (m.revenue / m.spend).toFixed(2) + "x" : "–";
+            return `| ${m.month} | ${formatCurrency(m.spend)} | ${formatCurrency(m.revenue)} | ${roas} | ${Math.round(m.purchases || 0)} |`;
+          }),
+        ];
+
+        if (data.ytd) {
+          const ty = data.ytd.thisYear;
+          const ly = data.ytd.lastYear;
+          lines.push(``, `### YTD Sammenligning`);
+          lines.push(`| | I år | Sidste år |`);
+          lines.push(`|---|------|-----------|`);
+          lines.push(`| Spend | ${formatCurrency(ty.spend)} | ${formatCurrency(ly.spend)} |`);
+          lines.push(`| Revenue | ${formatCurrency(ty.revenue)} | ${formatCurrency(ly.revenue)} |`);
+          lines.push(`| ROAS | ${ty.spend > 0 ? (ty.revenue / ty.spend).toFixed(2) + "x" : "–"} | ${ly.spend > 0 ? (ly.revenue / ly.spend).toFixed(2) + "x" : "–"} |`);
+        }
+
+        return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(e.message);
+      }
+    }
+  );
+
+  // ─── Tool: trigger_thumbnail_refresh ───────────────────────────────────────
+
+  server.tool(
+    "trigger_thumbnail_refresh",
+    "Trigger en manuel opdatering af creative thumbnails i Supabase Storage for en klient",
+    {
+      client_name: z.string().describe("Klientens navn"),
+    },
+    async ({ client_name }) => {
+      const dashboardUrl = process.env.DASHBOARD_URL;
+      if (!dashboardUrl) return err("DASHBOARD_URL env var ikke sat");
+      const sb = getSupabase();
+      const client = await findClient(sb, client_name);
+      if (!client) return noClient(client_name);
+
+      try {
+        const resp = await fetch(`${dashboardUrl}/api/creatives/refresh-thumbnails`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clientId: client.id }),
+        });
+        if (!resp.ok) return err(`Thumbnail refresh fejlede: ${resp.status}`);
+        return text(`Thumbnail refresh trigget for ${client.name}. Det tager typisk 2-5 minutter.`);
+      } catch (e: any) {
+        return err(e.message);
+      }
+    }
+  );
+
+  // ─── Tool: generate_ai_review ──────────────────────────────────────────────
+
+  server.tool(
+    "generate_ai_review",
+    "Generer en AI-baseret performance review for en klient. Bruger Claude Haiku til at analysere data og skrive en opsummering.",
+    {
+      client_name: z.string().describe("Klientens navn"),
+      time_range: z.string().default("last_30d").describe(TIME_RANGE_DESC),
+      context: z.string().optional().describe("Ekstra kontekst til AI-review (f.eks. 'fokuser på Klaviyo flows')"),
+    },
+    async ({ client_name, time_range, context }) => {
+      const dashboardUrl = process.env.DASHBOARD_URL;
+      if (!dashboardUrl) return err("DASHBOARD_URL env var ikke sat");
+      const sb = getSupabase();
+      const client = await findClient(sb, client_name);
+      if (!client) return noClient(client_name);
+      const { since, until } = resolveDateRange(time_range);
+
+      try {
+        const resp = await fetch(`${dashboardUrl}/api/ai/generate-review`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clientId: client.id, from: since, to: until, context }),
+        });
+        if (!resp.ok) {
+          const body = await resp.text().catch(() => "");
+          return err(`AI review fejlede: ${resp.status} ${body}`);
+        }
+        const data = await resp.json();
+        return text(data.review || data.content || JSON.stringify(data));
+      } catch (e: any) {
+        return err(e.message);
+      }
+    }
+  );
+
+  // ─── Tool: check_data_source_health ────────────────────────────────────────
+
+  server.tool(
+    "check_data_source_health",
+    "Tjek health status for en data source (Meta, Google Ads, Klaviyo, Shopify). Viser seneste sync, fejl og forbindelsesstatus.",
+    {
+      client_name: z.string().describe("Klientens navn"),
+      source_type: z.enum(["all", "meta", "google_ads", "klaviyo", "shopify"]).default("all").describe("Filtrer på kildetype"),
+    },
+    async ({ client_name, source_type }) => {
+      const sb = getSupabase();
+      const client = await findClient(sb, client_name);
+      if (!client) return noClient(client_name);
+
+      let query = sb
+        .from("data_sources")
+        .select("id, source_type, display_name, is_active, last_synced_at, last_error, config, created_at")
+        .eq("client_id", client.id);
+
+      if (source_type !== "all") query = query.eq("source_type", source_type);
+
+      const { data, error } = await query;
+      if (error) return err(error.message);
+      if (!data?.length) return text(`Ingen data sources fundet for ${client.name}${source_type !== "all" ? ` (${source_type})` : ""}`);
+
+      const lines = [
+        `## ${client.name} – Data Sources Health`,
+        ``,
+        `| Kilde | Navn | Status | Sidste sync | Fejl |`,
+        `|-------|------|--------|-------------|------|`,
+        ...data.map((ds: any) => {
+          const status = ds.is_active ? "✅ Aktiv" : "⏸️ Pauseret";
+          const lastSync = ds.last_synced_at ? new Date(ds.last_synced_at).toISOString().replace("T", " ").slice(0, 16) : "Aldrig";
+          const error = ds.last_error ? ds.last_error.slice(0, 40) : "–";
+          return `| ${ds.source_type} | ${ds.display_name || "–"} | ${status} | ${lastSync} | ${error} |`;
+        }),
+      ];
+
+      return text(lines.join("\n"));
+    }
+  );
+
+  // ─── Tool: trigger_source_sync ─────────────────────────────────────────────
+
+  server.tool(
+    "trigger_source_sync",
+    "Trigger sync for en specifik data source. Bruger Inngest til at starte baggrundssync.",
+    {
+      client_name: z.string().describe("Klientens navn"),
+      source_type: z.enum(["meta", "google_ads", "klaviyo"]).describe("Kildetype der skal synkes"),
+    },
+    async ({ client_name, source_type }) => {
+      const dashboardUrl = process.env.DASHBOARD_URL;
+      if (!dashboardUrl) return err("DASHBOARD_URL env var ikke sat");
+      const sb = getSupabase();
+      const client = await findClient(sb, client_name);
+      if (!client) return noClient(client_name);
+
+      // Find the data source
+      const { data: sources } = await sb
+        .from("data_sources")
+        .select("id")
+        .eq("client_id", client.id)
+        .eq("source_type", source_type)
+        .eq("is_active", true)
+        .limit(1);
+
+      if (!sources?.length) return err(`Ingen aktiv ${source_type} data source for ${client.name}`);
+
+      try {
+        const resp = await fetch(`${dashboardUrl}/api/data-sources/${sources[0].id}/sync`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Request-Source": "mcp",
+          },
+        });
+        if (!resp.ok) return err(`Sync trigger fejlede: ${resp.status}`);
+        return text(`${source_type} sync trigget for ${client.name}. Tjek status om 5-10 minutter.`);
       } catch (e: any) {
         return err(e.message);
       }
