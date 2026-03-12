@@ -50,8 +50,53 @@ const TIME_RANGE_DESC = "Tidsperiode. Presets: last_7d, last_30d, last_90d, this
 export function createMcpServer(): McpServer {
   const server = new McpServer({
     name: "nr-agency",
-    version: "1.0.0",
+    version: "1.1.0",
+    description: "Neble+Rohde performance marketing MCP. 51 tools til Meta Ads, Klaviyo, Google Ads, Shopify og lead-analyse. Alle data fra Supabase. Start med get_clients. Klaviyo ANALYSE: get_klaviyo_stored_campaigns/stored_flows/monthly (Supabase). Meta: get_performance. Google: get_google_*.",
   });
+
+  // ─── MCP Prompt: agency guide ────────────────────────────────────────────────
+
+  server.prompt(
+    "nr-agency-guide",
+    "Komplet guide til N+R Agency MCP — tool-oversigt, workflows og regler. Kald dette FØRST i enhver samtale.",
+    {},
+    async () => ({
+      messages: [{
+        role: "user" as const,
+        content: {
+          type: "text" as const,
+          text: `# N+R Agency MCP — Instruktioner
+
+Du er en performance marketing assistent for Neble+Rohde (N+R), et dansk bureau.
+Du har adgang til N+R's MCP-server med live klientdata fra Supabase.
+
+## Regler
+- Alle data (Meta, Google, Klaviyo, Shopify, leads) ligger i Supabase — kald tools direkte.
+- Start ALTID med get_clients for at finde klientnavnet (fuzzy match virker).
+- Svar på dansk medmindre brugeren skriver engelsk.
+- Gæt ALDRIG — brug det rigtige tool.
+
+## Tools efter kanal
+
+KLIENT: get_clients, get_brand_context, get_client_documents, get_agency_knowledge, get_data_sources, get_targets
+META ADS: get_performance, get_campaigns, get_campaign_details, get_ad_sets, get_top_ads, get_creatives, get_ad_details, get_ad_image, get_daily_trend, get_country_breakdown, get_demographic_breakdown, get_age_gender_breakdown, get_placement_breakdown, get_hourly_data, compare_periods
+KLAVIYO (analyse/Supabase): get_klaviyo_stored_campaigns, get_klaviyo_stored_flows, get_klaviyo_monthly, get_klaviyo_campaign_content
+KLAVIYO (real-time/API): get_klaviyo_overview, get_klaviyo_flows, get_klaviyo_campaigns, get_klaviyo_revenue, get_klaviyo_lists, get_klaviyo_segments, get_klaviyo_metrics, get_klaviyo_health
+GOOGLE: get_google_performance, get_google_campaigns, get_google_keywords, get_google_search_terms
+LEADS/ECOM: get_leads, get_lead_cohorts, get_lead_orders, get_shopify_revenue
+OVERBLIK: get_channel_overview, get_cross_client_overview, compare_periods
+ADMIN: trigger_sync, trigger_backfill, create_client, save_client_document
+
+## Workflows
+"Hvordan performer X?" → get_clients → get_performance + get_klaviyo_monthly + get_google_performance
+"Vis Klaviyo flows" → get_clients → get_klaviyo_stored_flows
+"Klaviyo analyse" → get_clients → get_klaviyo_monthly + get_klaviyo_stored_campaigns + get_klaviyo_stored_flows
+"Bedste ads?" → get_clients → get_top_ads
+"Sammenlign perioder" → get_clients → compare_periods`
+        }
+      }]
+    })
+  );
 
   // ─── Tool: get_clients ──────────────────────────────────────────────────────
 
@@ -2243,6 +2288,289 @@ export function createMcpServer(): McpServer {
       } catch (e: any) {
         return err(`Klaviyo health check fejlede: ${e.message}`);
       }
+    }
+  );
+
+  // ─── Tool: get_klaviyo_campaign_content ──────────────────────────────────
+
+  server.tool(
+    "get_klaviyo_campaign_content",
+    "Detaljeret kampagneindhold: subject line, preview text, afsender, links og performance. Brug denne til at analysere en specifik kampagnes indhold.",
+    {
+      client_name: z.string().describe("Klientens navn"),
+      campaign_name: z.string().describe("Kampagnenavn (delvis match OK)"),
+      time_range: z.string().default("last_30d").describe(TIME_RANGE_DESC),
+      include_html: z.boolean().default(false).describe("Inkluder fuld email HTML body. Default false. Sæt true kun når layout/design skal analyseres."),
+    },
+    async ({ client_name, campaign_name, time_range, include_html }) => {
+      const sb = getSupabase();
+      const client = await findClient(sb, client_name);
+      if (!client) return noClient(client_name);
+
+      const { since, until } = resolveDateRange(time_range);
+
+      // Build list of snapshot_months that overlap the date range
+      const months: string[] = [];
+      const startDate = new Date(since + "T00:00:00Z");
+      const endDate = new Date(until + "T00:00:00Z");
+      const cursor = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+      while (cursor <= endDate) {
+        const m = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`;
+        months.push(m);
+        cursor.setMonth(cursor.getMonth() + 1);
+      }
+
+      // Select columns — omit email_html unless requested
+      const selectCols = [
+        "id", "klaviyo_campaign_id", "campaign_name", "subject_line", "preview_text",
+        "from_email", "from_label", "send_time", "channel", "tag", "ai_tag", "email_links",
+        "received", "opened", "clicked", "conversions", "revenue", "unsubscribes",
+        "open_rate", "click_rate", "ctor", "conversion_rate", "unsub_rate", "revenue_per_email",
+        ...(include_html ? ["email_html"] : []),
+      ].join(", ");
+
+      const { data, error: dbErr } = await sb
+        .from("klaviyo_campaign_snapshots")
+        .select(selectCols)
+        .eq("client_id", client.id)
+        .ilike("campaign_name", `%${campaign_name}%`)
+        .in("snapshot_month", months)
+        .order("send_time", { ascending: false })
+        .limit(5);
+
+      if (dbErr) return err(`Supabase: ${dbErr.message}`);
+      if (!data || data.length === 0) return text(`Ingen campaigns matchede "${campaign_name}" for ${client.name} i perioden ${time_range}`);
+
+      const campaigns = data.map((c: any) => ({
+        id: c.id,
+        klaviyo_campaign_id: c.klaviyo_campaign_id,
+        campaign_name: c.campaign_name,
+        send_time: c.send_time,
+        channel: c.channel,
+        tag: c.tag,
+        ai_tag: c.ai_tag,
+        content: {
+          subject_line: c.subject_line,
+          preview_text: c.preview_text,
+          from_email: c.from_email,
+          from_label: c.from_label,
+          links: c.email_links || [],
+          link_count: Array.isArray(c.email_links) ? c.email_links.length : 0,
+          html: include_html ? c.email_html : null,
+        },
+        performance: {
+          received: c.received,
+          opened: c.opened,
+          clicked: c.clicked,
+          conversions: c.conversions,
+          revenue: parseFloat(c.revenue) || 0,
+          unsubscribes: c.unsubscribes,
+          open_rate: parseFloat(c.open_rate) || 0,
+          click_rate: parseFloat(c.click_rate) || 0,
+          ctor: parseFloat(c.ctor) || 0,
+          conversion_rate: parseFloat(c.conversion_rate) || 0,
+          unsub_rate: parseFloat(c.unsub_rate) || 0,
+          revenue_per_email: parseFloat(c.revenue_per_email) || 0,
+        },
+      }));
+
+      const result = {
+        campaigns,
+        match_count: campaigns.length,
+        note: include_html
+          ? "HTML body inkluderet. Brug dette til layout/design-analyse."
+          : "Showing top 5 matches by send_time. Set include_html=true for full email body.",
+      };
+
+      return text(JSON.stringify(result, null, 2));
+    }
+  );
+
+  // ─── Tool: get_klaviyo_stored_campaigns ──────────────────────────────────
+
+  server.tool(
+    "get_klaviyo_stored_campaigns",
+    "📊 ANALYSE: Klaviyo kampagner fra Supabase med tag-gruppering, subject lines, CTOR, revenue. Brug DENNE til analyse — ikke get_klaviyo_campaigns (som kalder API direkte).",
+    {
+      client_name: z.string().describe("Klientens navn"),
+      month: z.string().optional().describe("Måned i YYYY-MM format. Default: seneste tilgængelige."),
+    },
+    async ({ client_name, month }) => {
+      const sb = getSupabase();
+      const client = await findClient(sb, client_name);
+      if (!client) return noClient(client_name);
+
+      // Find latest month if not specified
+      let targetMonth = month;
+      if (!targetMonth) {
+        const { data: latest } = await sb
+          .from("klaviyo_campaign_snapshots")
+          .select("snapshot_month")
+          .eq("client_id", client.id)
+          .order("snapshot_month", { ascending: false })
+          .limit(1);
+        if (!latest?.length) return text(`Ingen Klaviyo kampagnedata i Supabase for ${client.name}. Kør sync via dashboard (/settings/data-sources → Klaviyo → Sync).`);
+        targetMonth = latest[0].snapshot_month;
+      }
+
+      const { data, error: dbErr } = await sb
+        .from("klaviyo_campaign_snapshots")
+        .select("campaign_name, send_time, subject_line, received, opened, clicked, conversions, revenue, open_rate, click_rate, ctor, conversion_rate, unsub_rate, revenue_per_email, tag, ai_tag")
+        .eq("client_id", client.id)
+        .eq("snapshot_month", targetMonth)
+        .order("revenue", { ascending: false });
+
+      if (dbErr) return err(`Supabase: ${dbErr.message}`);
+      if (!data?.length) return text(`Ingen kampagner for ${client.name} i ${targetMonth}. Kør Klaviyo sync.`);
+
+      // Tag-grouped summary
+      const tagMap = new Map<string, { count: number; received: number; revenue: number; clicked: number; opened: number }>();
+      for (const c of data as any[]) {
+        const tag = c.tag || c.ai_tag || "untagged";
+        const entry = tagMap.get(tag) || { count: 0, received: 0, revenue: 0, clicked: 0, opened: 0 };
+        entry.count++;
+        entry.received += c.received || 0;
+        entry.revenue += parseFloat(c.revenue) || 0;
+        entry.clicked += c.clicked || 0;
+        entry.opened += c.opened || 0;
+        tagMap.set(tag, entry);
+      }
+
+      const lines = [
+        `## ${client.name} – Klaviyo Kampagner (${targetMonth}) [Supabase]`,
+        ``,
+        `### Tag-grupperet`,
+        `| Tag | Antal | Sendt | Revenue | CTOR |`,
+        `|-----|-------|-------|---------|------|`,
+        ...[...tagMap.entries()].sort((a, b) => b[1].revenue - a[1].revenue).map(([tag, v]) =>
+          `| ${tag} | ${v.count} | ${formatNum(v.received)} | ${formatCurrency(v.revenue)} | ${v.opened > 0 ? ((v.clicked / v.opened) * 100).toFixed(1) + "%" : "–"} |`
+        ),
+        ``,
+        `### Top kampagner`,
+        `| Kampagne | Send dato | Subject | Sendt | CTOR | Revenue |`,
+        `|----------|-----------|---------|-------|------|---------|`,
+        ...(data as any[]).slice(0, 15).map((c: any) => {
+          const sendDate = c.send_time ? c.send_time.split("T")[0] : "–";
+          const subj = (c.subject_line || "–").slice(0, 35);
+          return `| ${(c.campaign_name || "–").slice(0, 30)} | ${sendDate} | ${subj} | ${formatNum(c.received)} | ${parseFloat(c.ctor)?.toFixed(1) || "–"}% | ${formatCurrency(parseFloat(c.revenue) || 0)} |`;
+        }),
+        ``,
+        `**${data.length} kampagner** i ${targetMonth}. Data fra Supabase (synket dagligt).`,
+      ];
+
+      return text(lines.join("\n"));
+    }
+  );
+
+  // ─── Tool: get_klaviyo_stored_flows ────────────────────────────────────
+
+  server.tool(
+    "get_klaviyo_stored_flows",
+    "📊 ANALYSE: Klaviyo flows fra Supabase med revenue share og MoM. Brug DENNE til analyse — ikke get_klaviyo_flows (som kalder API direkte).",
+    {
+      client_name: z.string().describe("Klientens navn"),
+      month: z.string().optional().describe("Måned i YYYY-MM format. Default: seneste tilgængelige."),
+    },
+    async ({ client_name, month }) => {
+      const sb = getSupabase();
+      const client = await findClient(sb, client_name);
+      if (!client) return noClient(client_name);
+
+      let targetMonth = month;
+      if (!targetMonth) {
+        const { data: latest } = await sb
+          .from("klaviyo_flow_snapshots")
+          .select("snapshot_month")
+          .eq("client_id", client.id)
+          .order("snapshot_month", { ascending: false })
+          .limit(1);
+        if (!latest?.length) return text(`Ingen Klaviyo flow-data i Supabase for ${client.name}. Kør sync via dashboard.`);
+        targetMonth = latest[0].snapshot_month;
+      }
+
+      const { data, error: dbErr } = await sb
+        .from("klaviyo_flow_snapshots")
+        .select("flow_name, status, received, opened, clicked, conversions, revenue, open_rate, click_rate, ctor, conversion_rate, unsub_rate, revenue_per_email, revenue_share")
+        .eq("client_id", client.id)
+        .eq("snapshot_month", targetMonth)
+        .order("revenue", { ascending: false });
+
+      if (dbErr) return err(`Supabase: ${dbErr.message}`);
+      if (!data?.length) return text(`Ingen flows for ${client.name} i ${targetMonth}. Kør Klaviyo sync.`);
+
+      const totalRevenue = (data as any[]).reduce((sum: number, f: any) => sum + (parseFloat(f.revenue) || 0), 0);
+
+      const lines = [
+        `## ${client.name} – Klaviyo Flows (${targetMonth}) [Supabase]`,
+        ``,
+        `| Flow | Status | Sendt | OR | CTOR | Revenue | Rev Share |`,
+        `|------|--------|-------|----|----- |---------|-----------|`,
+        ...(data as any[]).map((f: any) =>
+          `| ${(f.flow_name || "–").slice(0, 35)} | ${f.status} | ${formatNum(f.received)} | ${parseFloat(f.open_rate)?.toFixed(1) || "–"}% | ${parseFloat(f.ctor)?.toFixed(1) || "–"}% | ${formatCurrency(parseFloat(f.revenue) || 0)} | ${parseFloat(f.revenue_share)?.toFixed(1) || "–"}% |`
+        ),
+        ``,
+        `**Total flow revenue:** ${formatCurrency(totalRevenue)}`,
+        `Data fra Supabase (synket dagligt).`,
+      ];
+
+      return text(lines.join("\n"));
+    }
+  );
+
+  // ─── Tool: get_klaviyo_monthly ─────────────────────────────────────────
+
+  server.tool(
+    "get_klaviyo_monthly",
+    "📊 ANALYSE: Klaviyo månedlige aggregater fra Supabase. Revenue, OR, CTOR, campaigns sendt. Flow vs campaign split. MoM trends.",
+    {
+      client_name: z.string().describe("Klientens navn"),
+      months: z.number().default(6).describe("Antal måneder at hente (default: 6)"),
+      source_type: z.enum(["total", "campaign", "flow"]).default("total").describe("Filter: total (alt), campaign (kun kampagner), flow (kun flows)"),
+    },
+    async ({ client_name, months: monthCount, source_type }) => {
+      const sb = getSupabase();
+      const client = await findClient(sb, client_name);
+      if (!client) return noClient(client_name);
+
+      const { data, error: dbErr } = await sb
+        .from("klaviyo_monthly_aggregates")
+        .select("month, source_type, tag, campaigns_sent, total_received, total_opened, total_clicked, total_conversions, total_revenue, avg_open_rate, avg_click_rate, avg_ctor, avg_conversion_rate")
+        .eq("client_id", client.id)
+        .eq("source_type", source_type)
+        .eq("tag", source_type === "campaign" ? "__all__" : "__none__")
+        .order("month", { ascending: false })
+        .limit(monthCount);
+
+      if (dbErr) return err(`Supabase: ${dbErr.message}`);
+      if (!data?.length) return text(`Ingen Klaviyo månedlige aggregater for ${client.name}. Kør sync via dashboard (/settings/data-sources → Klaviyo → Sync).`);
+
+      // Check for sync issues (all revenue = 0)
+      const allZeroRevenue = (data as any[]).every((d: any) => !d.total_revenue || parseFloat(d.total_revenue) === 0);
+      const syncWarning = allZeroRevenue ? "\n⚠️ Revenue er 0 for alle måneder — dette er sandsynligvis en SYNC-FEJL. Kør Klaviyo sync via dashboard.\n" : "";
+
+      const lines = [
+        `## ${client.name} – Klaviyo Månedsoverblik (${source_type}) [Supabase]`,
+        syncWarning,
+        `| Måned | Campaigns | Sendt | Revenue | OR | CTOR | Conv Rate |`,
+        `|-------|-----------|-------|---------|----|----- |-----------|`,
+        ...(data as any[]).reverse().map((d: any) =>
+          `| ${d.month} | ${d.campaigns_sent || "–"} | ${formatNum(d.total_received)} | ${formatCurrency(parseFloat(d.total_revenue) || 0)} | ${parseFloat(d.avg_open_rate)?.toFixed(1) || "–"}% | ${parseFloat(d.avg_ctor)?.toFixed(1) || "–"}% | ${parseFloat(d.avg_conversion_rate)?.toFixed(1) || "–"}% |`
+        ),
+        ``,
+        `Data fra Supabase (synket dagligt). Rates er weighted by received.`,
+      ];
+
+      // Add MoM if we have 2+ months
+      if (data.length >= 2) {
+        const curr = data[0] as any;
+        const prev = data[1] as any;
+        const currRev = parseFloat(curr.total_revenue) || 0;
+        const prevRev = parseFloat(prev.total_revenue) || 0;
+        const revChange = prevRev > 0 ? ((currRev - prevRev) / prevRev * 100).toFixed(1) : "–";
+        lines.push(``, `**MoM (${prev.month} → ${curr.month}):** Revenue ${revChange}%`);
+      }
+
+      return text(lines.join("\n"));
     }
   );
 

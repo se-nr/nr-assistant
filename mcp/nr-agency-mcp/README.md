@@ -4,16 +4,20 @@ Performance data + klientkontekst for hele Neble+Rohde teamet.
 
 ## Hvad kan den?
 
-| Tool | Beskrivelse |
-|------|-------------|
-| `get_clients` | List alle aktive klienter |
-| `get_performance` | Aggregeret spend, ROAS, køb for en klient |
-| `get_top_ads` | Top-performende annoncer sorteret efter ROAS/spend |
-| `get_client_context` | Brand, TOV, målgruppe fra klient-databasen |
-| `get_demographic_breakdown` | Alder, køn, placement breakdown |
-| `trigger_sync` | Trigger Meta Ads sync via dashboard Inngest |
+| Tool | Kilde | Beskrivelse |
+|------|-------|-------------|
+| `get_clients` | Supabase | List alle aktive klienter |
+| `get_performance` | Dashboard API | Aggregeret spend, ROAS, køb for en klient |
+| `get_top_ads` | Dashboard API | Top-performende annoncer sorteret efter ROAS/spend |
+| `get_brand_context` | Supabase | Brand, TOV, målgruppe fra klient-databasen |
+| `get_demographic_breakdown` | Dashboard API | Alder, køn, placement breakdown |
+| `get_klaviyo_stored_campaigns` | 📊 Supabase | Kampagner med tag, subject line, CTOR, revenue |
+| `get_klaviyo_stored_flows` | 📊 Supabase | Flows med revenue share |
+| `get_klaviyo_monthly` | 📊 Supabase | MoM aggregater og trends |
+| `get_klaviyo_overview` | 🔄 Klaviyo API | Real-time email overblik |
+| `trigger_sync` | Dashboard API | Trigger data-sync for en klient |
 
-Data kommer fra Supabase (Meta Ads synkroniseres dagligt) – **ingen direkte Meta API kald**.
+Meta og Klaviyo data synkroniseres dagligt til Supabase. **Til analyse:** brug altid Supabase-tools (📊). Klaviyo API-tools (🔄) kun til real-time status.
 
 ## Setup (lokal)
 
