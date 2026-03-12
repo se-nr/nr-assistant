@@ -27,6 +27,8 @@
 
 ### Forbedringer
 - **MCP prompt guide** — opdateret med alle 66 tools inkl. nye kategorier (RAPPORTER, ADMIN)
+- **Klaviyo routing fix** — prompt har nu eksplicit advarsel mod at bruge direkte Klaviyo API-tools (spring_copenhagen_*) til analyse. Subject lines, HTML og revenue-per-email KUN tilgængelig via Supabase-tools (get_klaviyo_stored_campaigns, get_klaviyo_campaign_content)
+- Nyt workflow: "Klaviyo kampagne-indhold" → get_klaviyo_campaign_content
 - MCP server version bumped til 2.0.0 internt
 
 ---

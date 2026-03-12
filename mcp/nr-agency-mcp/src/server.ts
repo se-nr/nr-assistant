@@ -76,12 +76,21 @@ Du har adgang til N+R's MCP-server med live klientdata fra Supabase.
 - Svar på dansk medmindre brugeren skriver engelsk.
 - Gæt ALDRIG — brug det rigtige tool.
 
+## ⚠️ KLAVIYO ROUTING — KRITISK
+Brug ALTID disse N+R Supabase-tools til Klaviyo-analyse:
+- get_klaviyo_stored_campaigns → kampagner med subject lines, CTOR, revenue, tags
+- get_klaviyo_stored_flows → flows med revenue share
+- get_klaviyo_monthly → MoM/YoY sammenligninger
+- get_klaviyo_campaign_content → subject lines, preview text, afsender, links, HTML body
+BRUG ALDRIG mcp__spring_copenhagen_*-tools til analyse. De har IKKE subject lines, HTML eller revenue-per-email.
+De direkte Klaviyo MCP-connectors (spring_copenhagen_no/dk) er KUN til opsætning/administration — aldrig til performance-analyse.
+
 ## Tools efter kanal
 
 KLIENT: get_clients, get_brand_context, get_client_documents, get_agency_knowledge, get_data_sources, get_targets
 META ADS: get_performance, get_campaigns, get_campaign_details, get_ad_sets, get_top_ads, get_creatives, get_ad_details, get_ad_image, get_daily_trend, get_country_breakdown, get_demographic_breakdown, get_age_gender_breakdown, get_placement_breakdown, get_hourly_data, compare_periods
-KLAVIYO (analyse/Supabase): get_klaviyo_stored_campaigns, get_klaviyo_stored_flows, get_klaviyo_monthly, get_klaviyo_campaign_content
-KLAVIYO (real-time/API): get_klaviyo_overview, get_klaviyo_flows, get_klaviyo_campaigns, get_klaviyo_revenue, get_klaviyo_lists, get_klaviyo_segments, get_klaviyo_metrics, get_klaviyo_health
+KLAVIYO (analyse → Supabase): get_klaviyo_stored_campaigns, get_klaviyo_stored_flows, get_klaviyo_monthly, get_klaviyo_campaign_content
+KLAVIYO (overblik → Supabase): get_klaviyo_overview, get_klaviyo_flows, get_klaviyo_campaigns, get_klaviyo_revenue, get_klaviyo_lists, get_klaviyo_segments, get_klaviyo_metrics, get_klaviyo_health
 GOOGLE: get_google_performance, get_google_campaigns, get_google_keywords, get_google_search_terms, get_google_shopping, get_google_geo, get_google_ad_groups, get_google_assets, get_google_monthly_comparison
 LEADS/ECOM: get_leads, get_lead_cohorts, get_lead_orders, get_lead_campaign_breakdown, get_lead_unmatched, get_shopify_revenue
 OVERBLIK: get_channel_overview, get_cross_client_overview, get_cross_channel, get_monthly_insights, compare_periods
@@ -92,6 +101,7 @@ ADMIN: trigger_sync, trigger_backfill, trigger_source_sync, trigger_thumbnail_re
 "Hvordan performer X?" → get_clients → get_performance + get_klaviyo_monthly + get_google_performance
 "Vis Klaviyo flows" → get_clients → get_klaviyo_stored_flows
 "Klaviyo analyse" → get_clients → get_klaviyo_monthly + get_klaviyo_stored_campaigns + get_klaviyo_stored_flows
+"Klaviyo kampagne-indhold" → get_clients → get_klaviyo_campaign_content (har subject line, links, HTML)
 "Bedste ads?" → get_clients → get_top_ads
 "Sammenlign perioder" → get_clients → compare_periods`
         }
