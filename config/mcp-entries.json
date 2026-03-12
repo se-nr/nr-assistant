@@ -5,6 +5,6 @@
   },
   "nr-agency": {
     "command": "node",
-    "args": ["/Users/isidor/.claude/nr-assistant/mcp/nr-agency-mcp/dist/src/index.js"]
+    "args": ["/Users/isidor/.claude/nr-assistant/mcp/nr-agency-mcp/dist/index.js"]
   }
 }

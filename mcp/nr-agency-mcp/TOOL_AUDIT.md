@@ -45,7 +45,7 @@
 | `/api/data-sources/[id]/health` | `check_data_source_health` | ✅ |
 | `/api/data-sources/[id]/sync` | `trigger_source_sync` | ✅ |
 | **Supabase Storage** | | |
-| `client-reports` bucket | `read_client_report`, `list_client_reports` | ✅ |
+| `client-reports` bucket | `read_client_report`, `write_client_report`, `list_client_reports` | ✅ |
 | `creative-thumbnails` bucket | (via `get_ad_image`) | ✅ |
 | **Sync / Admin** | | |
 | `/api/sync` | `trigger_sync` | ✅ |

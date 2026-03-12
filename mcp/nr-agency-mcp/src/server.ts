@@ -51,7 +51,7 @@ export function createMcpServer(): McpServer {
   const server = new McpServer({
     name: "nr-agency",
     version: "2.0.0",
-    description: "Neble+Rohde performance marketing MCP. 66 tools til Meta Ads, Klaviyo, Google Ads, Shopify, lead-analyse, cross-channel og rapporter. Alle data fra Supabase. Start med get_clients. Klaviyo ANALYSE: get_klaviyo_stored_campaigns/stored_flows/monthly. Meta: get_performance. Google: get_google_*. Rapporter: read_client_report.",
+    description: "Neble+Rohde performance marketing MCP. 67 tools til Meta Ads, Klaviyo, Google Ads, Shopify, lead-analyse, cross-channel og rapporter. Alle data fra Supabase. Start med get_clients. Klaviyo ANALYSE: get_klaviyo_stored_campaigns/stored_flows/monthly. Meta: get_performance. Google: get_google_*. Rapporter: read_client_report, write_client_report.",
   });
 
   // ─── MCP Prompt: agency guide ────────────────────────────────────────────────
@@ -85,7 +85,7 @@ KLAVIYO (real-time/API): get_klaviyo_overview, get_klaviyo_flows, get_klaviyo_ca
 GOOGLE: get_google_performance, get_google_campaigns, get_google_keywords, get_google_search_terms, get_google_shopping, get_google_geo, get_google_ad_groups, get_google_assets, get_google_monthly_comparison
 LEADS/ECOM: get_leads, get_lead_cohorts, get_lead_orders, get_lead_campaign_breakdown, get_lead_unmatched, get_shopify_revenue
 OVERBLIK: get_channel_overview, get_cross_client_overview, get_cross_channel, get_monthly_insights, compare_periods
-RAPPORTER: read_client_report, list_client_reports, generate_ai_review
+RAPPORTER: read_client_report, write_client_report, list_client_reports, generate_ai_review
 ADMIN: trigger_sync, trigger_backfill, trigger_source_sync, trigger_thumbnail_refresh, check_data_source_health, create_client, connect_google_ads, save_client_document
 
 ## Workflows
@@ -3217,7 +3217,7 @@ ADMIN: trigger_sync, trigger_backfill, trigger_source_sync, trigger_thumbnail_re
     "Installer NR Assistant (skills, guides, MCP config) på denne computer. Returnerer et setup-script som Claude Code kører lokalt.",
     {},
     async () => {
-      const REPO_URL = "https://github.com/se-nr/nr-assistant.git";
+      const REPO_URL = "https://github.com/Neblerohde/nr-assistant.git";
       const script = `#!/bin/bash
 set -e
 
@@ -3737,6 +3737,44 @@ ${script}
           }),
         ];
         return text(lines.join("\n"));
+      } catch (e: any) {
+        return err(e.message);
+      }
+    }
+  );
+
+  // ─── Tool: write_client_report ─────────────────────────────────────────────
+
+  server.tool(
+    "write_client_report",
+    "Skriv eller opdatér en rapport-fil i Supabase Storage (client-reports bucket). Brug til at gemme markdown-rapporter, analyser, eller reviews. Filer gemmes som '{klient}/{filnavn}.md'.",
+    {
+      path: z.string().describe("Fuld sti i bucketen, f.eks. 'i-love-beauty/monthly-review-2026-03.md'"),
+      content: z.string().describe("Markdown-indhold der skal gemmes"),
+      overwrite: z.boolean().default(true).describe("Overskrid eksisterende fil (default: true)"),
+    },
+    async ({ path, content, overwrite }) => {
+      try {
+        const sb = getSupabase();
+        const blob = new Blob([content], { type: "text/markdown" });
+
+        if (!overwrite) {
+          // Check if file exists
+          const parts = path.split("/");
+          const fileName = parts.pop()!;
+          const folder = parts.join("/");
+          const { data: existing } = await sb.storage.from("client-reports").list(folder, { search: fileName });
+          if (existing?.some((f: any) => f.name === fileName)) {
+            return err(`Filen '${path}' eksisterer allerede. Sæt overwrite=true for at overskrive.`);
+          }
+        }
+
+        const { error } = await sb.storage
+          .from("client-reports")
+          .upload(path, blob, { contentType: "text/markdown", upsert: true });
+
+        if (error) return err(`Kunne ikke gemme fil: ${error.message}`);
+        return text(`Rapport gemt: client-reports/${path} (${Math.round(content.length / 1024)} KB)`);
       } catch (e: any) {
         return err(e.message);
       }

@@ -104,7 +104,7 @@ Hold det kort — en enkelt linje som "Du kan ogsaa koere `/elle:analyze [klient
 ## Installér fra bunden (ny maskine)
 
 ```bash
-git clone https://github.com/se-nr/nr-assistant ~/.claude/nr-assistant
+git clone https://github.com/Neblerohde/nr-assistant ~/.claude/nr-assistant
 bash ~/.claude/nr-assistant/install.sh
 ```
 
