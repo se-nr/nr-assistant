@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.0.0] — 2026-03-12
+
+### Nye features
+- **Supabase-first Klaviyo analyse** — 3 nye MCP tools der laeser direkte fra Supabase i stedet for Klaviyo API
+  - `get_klaviyo_stored_campaigns` — tag-grupperet kampagnedata, subject lines, CTOR, revenue
+  - `get_klaviyo_stored_flows` — flows med revenue share og MoM
+  - `get_klaviyo_monthly` — maanedlige aggregater med MoM trends og sync-fejl detection
+- **`/elle:verify`** — ny skill til verifikation af data og beregninger i rapporter
+- **Kanal-kontekst filer** — `client-context.md`, `meta-context.md`, `klaviyo-context.md`, `google-context.md`
+- **Grounded analyse-formater** — `klaviyo-analysis.md`, `meta-analysis.md`, `google-analysis.md` med Supabase schema-reference
+
+### Forbedringer
+- **Data-source priority** — alle skills og agents bruger nu Supabase som eneste datakilde til analyse. Klaviyo API kun til real-time status
+- **MCP prompt guide** — `nr-agency-guide` prompt med komplet tool-oversigt og workflows
+- **CLAUDE_PROJECT_INSTRUCTIONS.md** — opdateret med 📊/🔄 markering og Supabase-first regler
+- **Elle marketplace sync** — MCP server synkroniseret med `Neblerohde/elle-marketplace`
+
+### Breaking changes
+- Klaviyo API tools (`get_klaviyo_overview`, `get_klaviyo_flows`, etc.) maa ALDRIG bruges til analyse — kun til real-time/operationelle tjek
+
+---
+
 ## [1.3.0] — 2026-03-05
 
 ### Nye features
