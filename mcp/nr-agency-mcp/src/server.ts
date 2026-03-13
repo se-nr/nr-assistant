@@ -50,8 +50,8 @@ const TIME_RANGE_DESC = "Tidsperiode. Presets: last_7d, last_30d, last_90d, this
 export function createMcpServer(): McpServer {
   const server = new McpServer({
     name: "nr-agency",
-    version: "2.0.0",
-    description: "Neble+Rohde performance marketing MCP. 67 tools til Meta Ads, Klaviyo, Google Ads, Shopify, lead-analyse, cross-channel og rapporter. Alle data fra Supabase. Start med get_clients. Klaviyo ANALYSE: get_klaviyo_stored_campaigns/stored_flows/monthly. Meta: get_performance. Google: get_google_*. Rapporter: read_client_report, write_client_report.",
+    version: "2.1.0",
+    description: "Neble+Rohde performance marketing MCP. 67+ tools + 8 Elle workflow-prompts. Meta Ads, Klaviyo, Google Ads, Shopify, lead-analyse, cross-channel og rapporter. Alle data fra Supabase. Start med get_clients. Elle prompts: elle-weekly, elle-analyze, elle-review, elle-audit, elle-creative-test, elle-brief, elle-creative, elle-discover.",
   });
 
   // ─── MCP Prompt: agency guide ────────────────────────────────────────────────
@@ -4531,6 +4531,505 @@ ${script}
         return err(e.message);
       }
     }
+  );
+
+  // ─── Elle MCP Prompts ────────────────────────────────────────────────────────
+  // Adaptive workflows for Claude.ai — each prompt is a self-contained Elle command.
+  // They reference existing MCP tools (get_performance, get_top_ads, etc.) and
+  // write_client_report for output. No local file access needed.
+
+  server.prompt(
+    "elle-weekly",
+    "Ugentlig performance-rapport. Henter data, sammenligner med forrige uge, evaluerer signaler, og leverer Slack-klar review + fuld rapport.",
+    { client_name: z.string().describe("Klientens navn (eller 'all' for alle klienter)") },
+    async ({ client_name }) => ({
+      messages: [{
+        role: "user" as const,
+        content: {
+          type: "text" as const,
+          text: `# Elle Weekly — Ugentlig Performance-rapport for "${client_name}"
+
+Du er en performance marketing assistent for Neble+Rohde (N+R). Lav en ugentlig rapport.
+
+## Workflow
+
+### Trin 1: Hent data
+1. Kald \`get_clients\` for at finde klienten
+2. Kald \`get_performance\` med time_range="last_7d"
+3. Kald \`compare_periods\` med current="last_7d", previous="previous_7d"
+4. Kald \`get_top_ads\` med time_range="last_7d", sort_by="spend", limit=5
+5. Hvis klienten har Klaviyo: kald \`get_klaviyo_monthly\` + \`get_klaviyo_stored_campaigns\`
+6. Hvis klienten har Google: kald \`get_google_performance\` med time_range="last_7d"
+
+### Trin 2: Evaluér signaler (tjek ALLE disse)
+**Spend:** >20% afvigelse fra forrige uge? Budget pacing >115% eller <85%? Fragmentering (<50 kr/dag per kampagne)?
+**Performance:** CTR faldet >15%? CPC steget >25%? ROAS under target? CR ændret >20%?
+**Creative:** Frekvens >3.5? Top ad >60% af spend? Bottom ads med ROAS <1.0 og >200 kr spend?
+**Audience:** Learning phase kampagner? Reach stagnation? Nye audiences uden konverteringer >300 kr?
+
+### Trin 3: Skriv review i dette PRÆCISE format (Slack-copy)
+\`\`\`
+**[Klient]** 📅 [D/M] → [D/M]
+
+**Overordnet:**
+**Omsætning:** X kr (+/-X%) | **Spend:** X kr (+/-X%) | **MER:** X,xx (+/-X%) | **Køb:** X (+/-X%)
+[2-4 sætninger AI-analyse: hvad skete, hvorfor, hvad er vigtigt. Vær SPECIFIK — nævn konkrete kampagner, ads, produkter.]
+
+**Meta:**
+**Forbrug:** X kr (+/-X%) | **Omsætning:** X kr (+/-X%) | **ROAS:** X,xx (+/-X%) | **CPC:** X kr (+/-X%) | **CTR:** X,x% (+/-X%) | **CPM:** X kr (+/-X%) | **CR:** X,x% (+/-X%) | **Køb:** X (+/-X%) | **Pris pr. køb:** X kr (+/-X%)
+Top: \\\`[ad-navn]\\\` ROAS Xx · X køb · XK spend | Bottom: \\\`[ad-navn]\\\` ROAS Xx · X køb · XK spend
+
+**Google:** (udelad hvis ingen data)
+**Forbrug:** X kr (+/-X%) | **Omsætning:** X kr (+/-X%) | **ROAS:** X,xx (+/-X%) | ...
+
+**Actions:**
+- **P1:** [højeste prioritet — gør dette først]
+- **P1:** [højeste prioritet]
+- **P2:** [medium prioritet]
+- **P3:** [lav prioritet / undersøges]
+\`\`\`
+
+### Trin 4: Gem rapport
+Kald \`write_client_report\` med path="[klient-slug]/weekly-[YYYY]-W[XX]-report.md" og den fulde rapport.
+
+## Benchmarks (Fashion E-commerce DK)
+| Metric | Svagt | OK | Godt | Fremragende |
+|--------|-------|-----|------|-------------|
+| ROAS (7d+1d) | <1.5x | 1.5–2.5x | 2.5–4x | >4x |
+| CTR (Feed) | <0.5% | 0.5–1% | 1–2% | >2% |
+| CPC | >15 kr | 10–15 kr | 5–10 kr | <5 kr |
+| Frekvens (7d) | >4 | 3–4 | 2–3 | <2 |
+
+## Vigtige regler
+- KPI-rækkefølge per kanal: Forbrug, Omsætning, ROAS, CPC, CTR, CPM, CR, Køb, Pris pr. køb
+- Actions prioriteret med P1/P2/P3
+- Hele review skal kunne copy-pastes direkte til Slack
+- Nævn ALTID begge attributionsvinduer: 7d_click+1d_view OG 1d_click
+- Vær SPECIFIK i analysen — nævn ad-navne, kampagner, produkter
+
+Hvis "${client_name}" er "all": gentag for hver klient med blank linje imellem + statuslinje: ✅ stærke | ⚠️ opmærksomhed | 🔴 kritiske`
+        }
+      }]
+    })
+  );
+
+  server.prompt(
+    "elle-analyze",
+    "Performance-analyse — fra rå data til indsigt og anbefaling. Brug til kampagne-analyse, attribution-sammenligning og performance-reviews.",
+    { client_name: z.string().describe("Klientens navn"), focus: z.string().optional().describe("Specifikt fokus (fx 'kreativ', 'audience', 'budget')") },
+    async ({ client_name, focus }) => ({
+      messages: [{
+        role: "user" as const,
+        content: {
+          type: "text" as const,
+          text: `# Elle Analyze — Performance-analyse for "${client_name}"${focus ? ` (fokus: ${focus})` : ""}
+
+Du er en performance marketing analytiker for Neble+Rohde. Lav en dybdegående analyse.
+
+## Workflow
+
+### Trin 1: Hent data
+1. \`get_clients\` → find klient
+2. \`get_brand_context\` → forstå brand, målgruppe, strategi
+3. \`get_performance\` med time_range="last_30d"
+4. \`compare_periods\` med current="last_30d", previous="previous_30d"
+5. \`get_top_ads\` med time_range="last_30d", sort_by="roas", limit=10
+6. \`get_daily_trend\` med time_range="last_30d" (identificer mønster)
+7. Hvis Klaviyo: \`get_klaviyo_monthly\` + \`get_klaviyo_stored_campaigns\`
+8. Hvis Google: \`get_google_performance\` + \`get_google_campaigns\`
+
+### Trin 2: Analysér
+- Hvad performer over/under forventning?
+- Er der en årsag — kreativ, målgruppe, budget, sæson?
+- Identificer hurtige wins
+- Vurder mod benchmarks
+
+### Trin 3: Skriv rapport i dette format
+
+**Executive Summary (Slack-venlig)**
+- [Bullet 1 – vigtigste finding]
+- [Bullet 2]
+- [Bullet 3]
+- Konklusion: [én sætning med kontekst + anbefaling]
+
+**Oversigtstabel**
+| Metrik | 7d_click+1d_view | 1d_click | vs. forrige periode |
+|--------|-----------------|---------|---------------------|
+| ROAS | X | X | +/-X% |
+| Spend | X kr | — | +/-X% |
+| Omsætning | X kr | X kr | +/-X% |
+| Køb | X | X | +/-X% |
+| CTR | X% | — | +/-X% |
+| CPC | X kr | — | +/-X% |
+
+**Analyse** (3-5 afsnit, specifik og databaseret)
+**Anbefaling** (handlingsrettet)
+**Detaljerede data** (tabeller, breakdowns)
+
+### Trin 4: Gem
+\`write_client_report\` med path="[slug]/analysis-[YYYY-MM-DD]-[emne].md"
+
+## Attribution-regler
+- Angiv ALTID begge vinduer: 7d_click+1d_view OG 1d_click
+- Brug aldrig bare \`.value\` fra Meta API
+- Executive summary: bullets, Slack-venlig, ingen tabeller
+- Sammenlign med benchmarks
+
+## Benchmarks (Fashion DK)
+ROAS: <1.5x svagt | 1.5-2.5x OK | 2.5-4x godt | >4x fremragende
+CTR: <0.5% svagt | 0.5-1% OK | 1-2% godt | >2% fremragende
+CPC: >15kr svagt | 10-15kr OK | 5-10kr godt | <5kr fremragende`
+        }
+      }]
+    })
+  );
+
+  server.prompt(
+    "elle-review",
+    "Månedlig status — fra performance-data til komplet klient-rapport med Meta, Klaviyo, Google og anbefalinger.",
+    { client_name: z.string().describe("Klientens navn"), month: z.string().optional().describe("Måned (fx '2026-02' eller 'last_month')") },
+    async ({ client_name, month }) => ({
+      messages: [{
+        role: "user" as const,
+        content: {
+          type: "text" as const,
+          text: `# Elle Review — Månedlig rapport for "${client_name}" (${month || "last_month"})
+
+Du er en senior performance marketing konsulent for Neble+Rohde. Lav en komplet månedlig klientrapport.
+
+## Workflow
+
+### Trin 1: Hent al data
+1. \`get_clients\` → find klient
+2. \`get_brand_context\` → forstå klienten
+3. \`get_performance\` med time_range="${month || "last_month"}"
+4. \`compare_periods\` — MoM sammenligning
+5. \`get_top_ads\` med time_range="${month || "last_month"}", sort_by="spend", limit=10
+6. \`get_country_breakdown\` (hvis multi-market)
+7. \`get_demographic_breakdown\` og \`get_placement_breakdown\`
+8. \`get_daily_trend\` for hele måneden
+9. Klaviyo: \`get_klaviyo_monthly\` + \`get_klaviyo_stored_campaigns\` + \`get_klaviyo_stored_flows\`
+10. Google: \`get_google_performance\` + \`get_google_campaigns\` + \`get_google_keywords\`
+
+### Trin 2: Skriv rapport med disse sektioner
+
+1. **Executive Review** (2-3 sætninger)
+2. **Monthly Performance** (total revenue, spend, ROAS MoM, per kanal)
+3. **Meta Ads** (kampagner, top creatives, demografi, lande)
+4. **Klaviyo** (campaigns by tag, flows, subject line patterns)
+5. **Google Ads** (search, shopping, keywords)
+6. **Anbefalinger** (3-5 prioriterede actions med ejer)
+7. **Next Month Priorities** (tabel: prioritet, action, ejer, deadline)
+
+### Trin 3: Gem
+\`write_client_report\` med path="[slug]/monthly-review-[YYYY-MM].md"
+
+## Vigtige regler
+- Angiv ALTID begge attributionsvinduer
+- Vær specifik: nævn kampagnenavne, ad-navne, produkter
+- Sammenlign med benchmarks og klientens targets (\`get_targets\`)
+- MoM og YoY sammenligninger hvor muligt
+- Inkluder Klaviyo tag-grupperet analyse (\`get_klaviyo_stored_campaigns\` har tags)
+- Actions skal være HANDLINGSRETTEDE med specifik ejer`
+        }
+      }]
+    })
+  );
+
+  server.prompt(
+    "elle-audit",
+    "Comprehensive multi-channel audit af en klient. Meta + Klaviyo + Google. Struktureret gennemgang med fund og anbefalinger.",
+    { client_name: z.string().describe("Klientens navn") },
+    async ({ client_name }) => ({
+      messages: [{
+        role: "user" as const,
+        content: {
+          type: "text" as const,
+          text: `# Elle Audit — Multi-channel audit for "${client_name}"
+
+Du er en senior performance marketing auditor for Neble+Rohde. Lav en grundig audit.
+
+## Workflow
+
+### Trin 1: Hent data (ALLE kanaler)
+1. \`get_clients\` + \`get_brand_context\` + \`get_data_sources\`
+2. Meta: \`get_performance\` last_90d + \`get_campaigns\` + \`get_top_ads\` (limit=15) + \`get_demographic_breakdown\` + \`get_placement_breakdown\` + \`get_creatives\`
+3. Klaviyo: \`get_klaviyo_monthly\` + \`get_klaviyo_stored_campaigns\` + \`get_klaviyo_stored_flows\` + \`get_klaviyo_health\`
+4. Google: \`get_google_performance\` + \`get_google_campaigns\` + \`get_google_keywords\` + \`get_google_search_terms\`
+5. Cross-channel: \`get_channel_overview\` + \`get_cross_channel\`
+
+### Trin 2: Evaluér (struktureret checklist)
+
+**Meta Ads Audit:**
+- Kampagnestruktur: Antal aktive kampagner, budget-fragmentering, funnel-coverage (FP/IM/IP/EC)
+- Kreativ: Alder på top ads, frekvens, format-mix, hook diversitet
+- Audiences: Overlap, saturation, lookalike kvalitet
+- Attribution: 7d vs 1d gap (>40% = warning)
+- Budget: Effektivitet, pacing, allocation per funnel stage
+
+**Klaviyo Audit:**
+- Flow coverage: Welcome, cart, browse, post-purchase, winback — alle aktive?
+- Campaign cadence: Antal per måned, revenue per email, unsub rate
+- Deliverability: Open rate trend, spam complaints, bounce rate
+- Segmentering: Bruges segmenter? Eller blast til alle?
+- Subject lines: Variation? A/B testing? Emojis, urgency patterns?
+
+**Google Ads Audit:**
+- Kampagnetyper: Search, Shopping, PMax — coverage
+- Quality Score: Gennemsnit, antal keywords <5
+- Keyword health: Bred match vs exact, negative keywords
+- Shopping feed: Titler, beskrivelser, kategorier
+
+### Trin 3: Score og prioritér fund
+Rate hvert område: 🟢 Godt | 🟡 OK | 🔴 Kritisk
+Prioritér anbefalinger: Quick wins → Medium effort → Strategisk
+
+### Trin 4: Gem
+\`write_client_report\` med path="[slug]/audit-[YYYY-MM-DD].md"`
+        }
+      }]
+    })
+  );
+
+  server.prompt(
+    "elle-creative-test",
+    "Identificér hook patterns fra top-performende ads og generer test-koncepter for nye creatives.",
+    { client_name: z.string().describe("Klientens navn") },
+    async ({ client_name }) => ({
+      messages: [{
+        role: "user" as const,
+        content: {
+          type: "text" as const,
+          text: `# Elle Creative Test — Hook Pattern Analyse for "${client_name}"
+
+Du er en kreativ strateg for Neble+Rohde. Analysér top-performende ads og generer test-hypoteser.
+
+## Workflow
+
+### Trin 1: Hent creative data
+1. \`get_clients\` + \`get_brand_context\`
+2. \`get_top_ads\` med time_range="last_30d", sort_by="roas", limit=10
+3. \`get_top_ads\` med time_range="last_30d", sort_by="ctr", limit=10
+4. \`get_creatives\` for at se ad-navne og formater
+5. \`get_ad_details\` for de top 3 ads (copy, headlines, CTA)
+6. \`get_placement_breakdown\` (format × placement performance)
+
+### Trin 2: Analysér patterns
+- **Hook type:** Hvad fanger opmærksomhed? (problem, benefit, social proof, urgency, curiosity)
+- **Format:** Image vs video vs carousel — hvad performer bedst?
+- **Copy patterns:** Længde, tone, CTA-type
+- **Visual patterns:** Produktbillede vs lifestyle vs UGC
+- **Placement:** Feed vs Stories vs Reels — format-fit
+
+### Trin 3: Generer test-koncepter (3-5 stk)
+For hvert koncept:
+- **Hypotese:** "Vi tester [X] fordi [evidens fra data]"
+- **Hook:** Første 3 sekunder / headline
+- **Format:** Anbefalet format + placement
+- **Variant A/B:** Hvad varierer vi?
+- **Success metric:** Hvad måler vi, og hvad er target?
+
+### Trin 4: Gem
+\`write_client_report\` med path="[slug]/creative-test-[YYYY-MM-DD].md"`
+        }
+      }]
+    })
+  );
+
+  server.prompt(
+    "elle-brief",
+    "Lav et kampagne-brief med strukturerede spørgsmål. Output: udfyldt brief template klar til eksekvering.",
+    { client_name: z.string().describe("Klientens navn"), campaign_type: z.string().optional().describe("Kampagnetype (fx 'product launch', 'seasonal', 'always-on')") },
+    async ({ client_name, campaign_type }) => ({
+      messages: [{
+        role: "user" as const,
+        content: {
+          type: "text" as const,
+          text: `# Elle Brief — Kampagne-brief for "${client_name}"${campaign_type ? ` (${campaign_type})` : ""}
+
+Du er en kampagneplanlægger for Neble+Rohde. Lav et kampagne-brief.
+
+## Workflow
+
+### Trin 1: Hent kontekst
+1. \`get_clients\` + \`get_brand_context\`
+2. \`get_performance\` last_30d (nuværende baseline)
+3. \`get_targets\` (klientens KPI-targets)
+4. \`get_top_ads\` last_30d (hvad virker nu)
+
+### Trin 2: Spørg brugeren (brug disse felter)
+Still spørgsmål om det du IKKE kan finde i data:
+- Kampagnens formål (awareness, trafik, konvertering, retention)
+- Produkt/kollektion der promoveres
+- Budget og tidsperiode
+- Rabat/tilbud (hvis relevant)
+- Primær og sekundær målgruppe
+- Kanalstrategi (Meta, Google, Email, eller kombination)
+
+### Trin 3: Skriv brief
+
+**Campaign Brief: [Kampagnenavn]**
+
+| Felt | Detalje |
+|------|---------|
+| Klient | [navn] |
+| Kampagne | [navn] |
+| Periode | [start] → [slut] |
+| Budget | [total] ([dagligt]) |
+| Mål | [primært KPI + target] |
+| Produkt | [hvad promoveres] |
+| Tilbud | [rabat/budskab] |
+| Målgruppe | [primær + sekundær] |
+| Kanaler | [Meta / Google / Email] |
+
+**Funnel-strategi:**
+- FP (Awareness): [taktik]
+- IM (In-Market): [taktik]
+- IP (Retargeting): [taktik]
+- EC (Retention): [taktik]
+
+**Creative direction:**
+- Key visual: [beskrivelse]
+- Budskab/hook: [primært budskab]
+- Formater: [image/video/carousel + dimensioner]
+- Tone: [brand voice retning]
+
+**Success metrics:**
+| KPI | Target | Benchmark |
+|-----|--------|-----------|
+| ROAS | Xx | [nuværende] |
+| CPA | X kr | [nuværende] |
+| CTR | X% | [nuværende] |
+
+### Trin 4: Gem
+\`write_client_report\` med path="[slug]/brief-[kampagnenavn]-[YYYY-MM-DD].md"`
+        }
+      }]
+    })
+  );
+
+  server.prompt(
+    "elle-creative",
+    "Lav et creative brief til det kreative team — klar til produktion. Baseret på data og brand context.",
+    { client_name: z.string().describe("Klientens navn"), concept: z.string().optional().describe("Koncept eller kampagne at lave creatives til") },
+    async ({ client_name, concept }) => ({
+      messages: [{
+        role: "user" as const,
+        content: {
+          type: "text" as const,
+          text: `# Elle Creative — Creative Brief for "${client_name}"${concept ? ` (${concept})` : ""}
+
+Du er en kreativ direktør for Neble+Rohde. Lav et produktionsklart creative brief.
+
+## Workflow
+
+### Trin 1: Research
+1. \`get_clients\` + \`get_brand_context\` (brand voice, visual identity)
+2. \`get_top_ads\` last_30d sort_by="roas" limit=10 (hvad virker)
+3. \`get_top_ads\` last_30d sort_by="ctr" limit=5 (best hooks)
+4. \`get_creatives\` (eksisterende kreativt univers)
+5. \`get_placement_breakdown\` (format performance per placement)
+
+### Trin 2: Skriv creative brief
+
+**Creative Brief: [Koncept]**
+**Klient:** [navn] | **Dato:** [dato] | **Prepared by:** N+R
+
+**Baggrund & formål:** [Hvorfor dette creative? Hvad skal det løse?]
+
+**Målgruppe:**
+- Primær: [beskrivelse]
+- Pain points: [hvad holder dem tilbage]
+- Motivatorer: [hvad driver dem til køb]
+
+**Key message:** [Ét budskab — hvad skal modtageren huske?]
+
+**Mandatory elements:**
+- Logo placement: [hvor og hvordan]
+- Brand farver: [specifikke koder hvis tilgængelige]
+- CTA: [specifik call-to-action]
+- Legal: [evt. disclaimers]
+
+**Deliverables:**
+| Format | Dimensioner | Placement | Antal varianter |
+|--------|------------|-----------|----------------|
+| Static | 1080x1080 | Feed | 3 |
+| Static | 1080x1920 | Stories | 3 |
+| Video | 1080x1080 | Feed/Reels | 2 |
+
+**Hook varianter (test):**
+1. [Hook A — benefit-led]
+2. [Hook B — problem-agitate]
+3. [Hook C — social proof / testimonial]
+
+**Copy varianter:**
+- Primary text (kort): [max 125 tegn]
+- Primary text (lang): [max 250 tegn]
+- Headline: [max 40 tegn]
+- Description: [max 30 tegn]
+
+### Trin 3: Gem
+\`write_client_report\` med path="[slug]/creative-brief-[koncept]-[YYYY-MM-DD].md"`
+        }
+      }]
+    })
+  );
+
+  server.prompt(
+    "elle-discover",
+    "Quick discovery af en potentiel klient. Hurtig research, fit-vurdering og muligheds-kort.",
+    { company_name: z.string().describe("Virksomhedens navn"), website: z.string().optional().describe("Website URL") },
+    async ({ company_name, website }) => ({
+      messages: [{
+        role: "user" as const,
+        content: {
+          type: "text" as const,
+          text: `# Elle Discover — Quick Discovery for "${company_name}"${website ? ` (${website})` : ""}
+
+Du er en business development specialist for Neble+Rohde (dansk performance marketing bureau).
+
+## Workflow
+
+### Trin 1: Research
+Brug tilgængelig information til at besvare:
+1. **Virksomhed:** Hvad laver de? Branche? Produkter/services?
+2. **Digital tilstedeværelse:** Website kvalitet, e-commerce platform (Shopify, WooCommerce, etc.)
+3. **Paid media:** Kører de Meta Ads? Google Ads? (check Meta Ad Library)
+4. **Email:** Newsletter signup? Klaviyo/Mailchimp/andet?
+5. **Størrelse:** Estimeret omsætning, antal ansatte, markeder
+
+### Trin 2: Fit-vurdering
+
+**N+R Fit Score:** [1-10]
+
+| Kriterie | Score | Note |
+|----------|-------|------|
+| E-commerce (DTC) | [1-10] | [kommentar] |
+| Fashion/Lifestyle | [1-10] | [kommentar] |
+| Meta Ads potentiale | [1-10] | [kommentar] |
+| Klaviyo potentiale | [1-10] | [kommentar] |
+| Budget-estimat | [1-10] | [kommentar] |
+| Vækstpotentiale | [1-10] | [kommentar] |
+
+### Trin 3: Muligheds-kort
+
+**Umiddelbare muligheder:**
+- [Hvad kan N+R hjælpe med med det samme?]
+- [Quick wins vi kan pitche?]
+
+**Udfordringer/risici:**
+- [Hvad gør denne klient svær?]
+- [Red flags?]
+
+**Anbefalet tilgang:**
+- [Hvordan pitcher vi? Hvad leder vi med?]
+- [Estimeret startbudget og scope]
+
+### Trin 4: Gem
+\`write_client_report\` med path="discoveries/${company_name.toLowerCase().replace(/\\s+/g, "-")}-[YYYY-MM-DD].md"`
+        }
+      }]
+    })
   );
 
   return server;
