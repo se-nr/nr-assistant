@@ -63,7 +63,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       version: "2.1.0",
       status: "ok",
       auth: API_KEY ? "enabled" : "disabled",
-      toolCount: 67,
+      toolCount: "67+",
+      promptCount: 9,
+      prompts: ["nr-agency-guide", "elle-weekly", "elle-analyze", "elle-review", "elle-audit", "elle-creative-test", "elle-brief", "elle-creative", "elle-discover"],
       toolCategories: {
         klient: ["get_clients", "get_brand_context", "get_client_documents", "get_agency_knowledge", "get_data_sources", "get_targets"],
         meta: ["get_performance", "get_campaigns", "get_campaign_details", "get_ad_sets", "get_top_ads", "get_creatives", "get_ad_details", "get_ad_image", "get_daily_trend", "get_country_breakdown", "get_demographic_breakdown", "get_age_gender_breakdown", "get_placement_breakdown", "get_hourly_data", "compare_periods"],
